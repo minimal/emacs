@@ -1727,20 +1727,45 @@ should be ignored.  */)
 
   if (NILP (string))
     {
-      if (NILP (BVAR (current_buffer, enable_multibyte_characters)))
-	error ("Attempt to shape unibyte text");
+
       validate_region (&from, &to);
       frompos = XFASTINT (from);
       topos = XFASTINT (to);
-      frombyte = CHAR_TO_BYTE (frompos);
+      if (!NILP (BVAR (current_buffer, enable_multibyte_characters)))
+	frombyte = CHAR_TO_BYTE (frompos);
+      else
+	{
+	  ptrdiff_t pos;
+
+	  /* fill_gstring_header below uses
+	     FETCH_CHAR_ADVANCE_NO_CHECK that assumes the current
+	     buffer is multibyte, but it is safe as long as it only
+	     fetches ASCII chars.  */
+	  for (pos = frompos; pos < topos; pos++)
+	    if (!ASCII_BYTE_P (*(BYTE_POS_ADDR (pos))))
+	      error ("Attempt to shape non-ASCII part of unibyte text");
+	  frombyte = frompos;
+	}
     }
   else
     {
       CHECK_STRING (string);
       validate_subarray (string, from, to, SCHARS (string), &frompos, &topos);
-      if (! STRING_MULTIBYTE (string))
-	error ("Attempt to shape unibyte text");
-      frombyte = string_char_to_byte (string, frompos);
+      if (STRING_MULTIBYTE (string))
+	frombyte = string_char_to_byte (string, frompos);
+      else
+	{
+	  ptrdiff_t pos;
+
+	  /* fill_gstring_header below uses
+	     FETCH_STRING_CHAR_ADVANCE_NO_CHECK that assumes the
+	     string is multibyte, but it is safe as long as it only
+	     fetches ASCII chars.  */
+	  for (pos = frompos; pos < topos; pos++)
+	    if (!ASCII_BYTE_P (SREF (string, pos)))
+	      error ("Attempt to shape non-ASCII part of unibyte text");
+	  frombyte = frompos;
+	}
     }
 
   header = fill_gstring_header (Qnil, frompos, frombyte,

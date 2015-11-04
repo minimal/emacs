@@ -97,6 +97,7 @@ enum
 /* Return the raw 8-bit byte for character C.  */
 #define CHAR_TO_BYTE8(c) (CHAR_BYTE8_P (c) ? (c) - 0x3FFF00 : (c & 0xFF))
 
+
 /* Return the raw 8-bit byte for character C,
    or -1 if C doesn't correspond to a byte.  */
 #define CHAR_TO_BYTE_SAFE(c)						\
@@ -120,6 +121,9 @@ enum
 
 /* This is the maximum byte length of multibyte form.  */
 #define MAX_MULTIBYTE_LENGTH 5
+
+/* Nonzero iff C is an ASCII byte.  */
+#define ASCII_BYTE_P(c) UNSIGNED_CMP (c, <, 0x80)
 
 /* Nonzero iff X is a character.  */
 #define CHARACTERP(x) (NATNUMP (x) && XFASTINT (x) <= MAX_CHAR)
