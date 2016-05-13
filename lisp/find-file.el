@@ -4,7 +4,7 @@
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: c, matching, tools
 
-;; Copyright (C) 1994-1995, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1995, 2001-2016 Free Software Foundation, Inc.
 
 ;; This file is part of GNU Emacs.
 
@@ -222,7 +222,7 @@ may not exist.
 
 A typical format is
 
-    '(\".\" \"/usr/include\" \"$PROJECT/*/include\")
+    (\".\" \"/usr/include\" \"$PROJECT/*/include\")
 
 Environment variables can be inserted between slashes (`/').
 They will be replaced by their definition.  If a variable does

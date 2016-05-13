@@ -1,6 +1,6 @@
 ;;; cl-seq.el --- Common Lisp features, part 3  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993, 2001-2016 Free Software Foundation, Inc.
 
 ;; Author: Dave Gillespie <daveg@synaptics.com>
 ;; Old-Version: 2.02
@@ -774,7 +774,7 @@ to avoid corrupting the original LIST1 and LIST2.
 \nKeywords supported:  :test :test-not :key
 \n(fn LIST1 LIST2 [KEYWORD VALUE]...)"
   (cond ((null cl-list1) cl-list2) ((null cl-list2) cl-list1)
-	((equal cl-list1 cl-list2) cl-list1)
+	((and (not cl-keys) (equal cl-list1 cl-list2)) cl-list1)
 	(t
 	 (or (>= (length cl-list1) (length cl-list2))
 	     (setq cl-list1 (prog1 cl-list2 (setq cl-list2 cl-list1))))
@@ -849,7 +849,7 @@ to avoid corrupting the original LIST1 and LIST2.
 		(memq (car cl-list1) cl-list2))
 	      (push (car cl-list1) cl-res))
 	  (pop cl-list1))
-	cl-res))))
+        (nreverse cl-res)))))
 
 ;;;###autoload
 (defun cl-nset-difference (cl-list1 cl-list2 &rest cl-keys)

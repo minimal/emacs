@@ -1,6 +1,6 @@
 ;;; reftex-ref.el --- code to create labels and references with RefTeX
 
-;; Copyright (C) 1997-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2016 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <dominik@science.uva.nl>
 ;; Maintainer: auctex-devel@gnu.org
@@ -228,7 +228,7 @@ This function is controlled by the settings of reftex-insert-label-flags."
                                  (symbol-value reftex-docstruct-symbol)))
               (ding)
               (if (y-or-n-p
-`                  (format-message "Label `%s' exists. Use anyway? " label))
+                   (format-message "Label `%s' exists. Use anyway? " label))
                   (setq valid t)))
 
              ;; Label is ok

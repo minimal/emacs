@@ -1,6 +1,6 @@
 ;;; tex-mode.el --- TeX, LaTeX, and SliTeX mode commands  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1989, 1992, 1994-1999, 2001-2015 Free
+;; Copyright (C) 1985-1986, 1989, 1992, 1994-1999, 2001-2016 Free
 ;; Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -188,7 +188,7 @@ If two printers are not enough of a choice, you can set the variable
 for example,
 
     (setq tex-alt-dvi-print-command
-         '(format \"lpr -P%s\" (read-string \"Use printer: \")))
+         \\='(format \"lpr -P%s\" (read-string \"Use printer: \")))
 
 would tell \\[tex-print] with a prefix argument to ask you which printer to
 use."
@@ -732,7 +732,8 @@ automatically inserts its partner."
                   (let ((arg-end (match-end 0)))
                     (if (null type)     ;\end
                         (progn (goto-char arg-end)
-                               (latex-forward-sexp -1) (forward-word 1))
+                               (latex-forward-sexp -1)
+                               (forward-word-strictly 1))
                       (goto-char cmd-start)
                       (latex-forward-sexp 1)
                       (let (forward-sexp-function) (backward-sexp)))
@@ -3291,6 +3292,7 @@ There might be text before point."
     ("\\rightthreetimes" . ?⋌)
     ("\\risingdotseq" . ?≓)
     ("\\rtimes" . ?⋊)
+    ("\\times" . ?×)
     ("\\sbs" . ?﹨)
     ("\\searrow" . ?↘)
     ("\\setminus" . ?∖)

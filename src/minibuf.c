@@ -1,13 +1,13 @@
 /* Minibuffer input and completion.
 
-Copyright (C) 1985-1986, 1993-2015 Free Software Foundation, Inc.
+Copyright (C) 1985-1986, 1993-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -229,12 +229,7 @@ read_minibuf_noninteractive (Lisp_Object map, Lisp_Object initial,
 	  if (hide_char)
 	    fprintf (stdout, "%c", hide_char);
 	  if (len == size)
-	    {
-	      if (STRING_BYTES_BOUND / 2 < size)
-		memory_full (SIZE_MAX);
-	      size *= 2;
-	      line = xrealloc (line, size);
-	    }
+	    line = xpalloc (line, &size, 1, -1, sizeof *line);
 	  line[len++] = c;
 	}
     }
@@ -991,7 +986,7 @@ DEFUN ("read-no-blanks-input", Fread_no_blanks_input, Sread_no_blanks_input, 1, 
 Prompt with PROMPT.  Whitespace terminates the input.  If INITIAL is
 non-nil, it should be a string, which is used as initial input, with
 point positioned at the end, so that SPACE will accept the input.
-(Actually, INITIAL can also be a cons of a string and an integer.
+\(Actually, INITIAL can also be a cons of a string and an integer.
 Such values are treated as in `read-from-minibuffer', but are normally
 not useful in this function.)
 Third arg INHERIT-INPUT-METHOD, if non-nil, means the minibuffer inherits

@@ -1,6 +1,6 @@
 ;;; gnus-sum.el --- summary mode commands for Gnus
 
-;; Copyright (C) 1996-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2016 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -2220,6 +2220,7 @@ increase the score of each group you read."
   "\M-\C-e" gnus-summary-expire-articles-now
   "\177" gnus-summary-delete-article
   [delete] gnus-summary-delete-article
+  [backspace] gnus-summary-delete-article
   "m" gnus-summary-move-article
   "r" gnus-summary-respool-article
   "w" gnus-summary-edit-article
@@ -4003,7 +4004,8 @@ If SELECT-ARTICLES, only select those articles from GROUP."
 	      (gnus-group-next-unread-group 1))
 	  (gnus-handle-ephemeral-exit quit-config)))
       (if (null (gnus-list-of-unread-articles group))
-	  (gnus-message 3 "Group %s contains no messages" group)
+	  (gnus-message 3 "Group %s contains no messages"
+			(gnus-group-decoded-name group))
 	(gnus-message 3 "Can't select group"))
       nil)
      ;; The user did a `C-g' while prompting for number of articles,
@@ -5894,13 +5896,13 @@ If SELECT-ARTICLES, only select those articles from GROUP."
 			   (if only-read-p
 			       (format
 				"How many articles from %s (available %d, default %d): "
-				(gnus-group-decoded-name
-				 (gnus-group-real-name gnus-newsgroup-name))
+				(gnus-group-real-name
+				 (gnus-group-decoded-name gnus-newsgroup-name))
 				number default)
 			     (format
 			      "How many articles from %s (%d default): "
-			      (gnus-group-decoded-name
-			       (gnus-group-real-name gnus-newsgroup-name))
+			      (gnus-group-real-name
+			       (gnus-group-decoded-name gnus-newsgroup-name))
 			      default))
 			   nil
 			   nil

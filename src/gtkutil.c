@@ -1,13 +1,13 @@
 /* Functions for creating and updating GTK widgets.
 
-Copyright (C) 2003-2015 Free Software Foundation, Inc.
+Copyright (C) 2003-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -252,35 +252,6 @@ xg_create_default_cursor (Display *dpy)
   return gdk_cursor_new_for_display (gdpy, GDK_LEFT_PTR);
 }
 
-static GdkPixbuf *
-xg_get_pixbuf_from_pixmap (struct frame *f, Pixmap pix)
-{
-  int iunused;
-  GdkPixbuf *tmp_buf;
-  Window wunused;
-  unsigned int width, height, uunused;
-  XImage *xim;
-
-  XGetGeometry (FRAME_X_DISPLAY (f), pix, &wunused, &iunused, &iunused,
-                &width, &height, &uunused, &uunused);
-
-  xim = XGetImage (FRAME_X_DISPLAY (f), pix, 0, 0, width, height,
-                   ~0, XYPixmap);
-  if (!xim) return 0;
-
-  tmp_buf = gdk_pixbuf_new_from_data ((guchar *) xim->data,
-                                      GDK_COLORSPACE_RGB,
-                                      FALSE,
-                                      xim->bitmap_unit,
-                                      width,
-                                      height,
-                                      xim->bytes_per_line,
-                                      NULL,
-                                      NULL);
-  XDestroyImage (xim);
-  return tmp_buf;
-}
-
 /* Apply GMASK to GPIX and return a GdkPixbuf with an alpha channel.  */
 
 static GdkPixbuf *
@@ -288,46 +259,43 @@ xg_get_pixbuf_from_pix_and_mask (struct frame *f,
                                  Pixmap pix,
                                  Pixmap mask)
 {
-  int width, height;
-  GdkPixbuf *icon_buf, *tmp_buf;
+  GdkPixbuf *icon_buf = 0;
+  int iunused;
+  Window wunused;
+  unsigned int width, height, depth, uunused;
 
-  tmp_buf = xg_get_pixbuf_from_pixmap (f, pix);
-  icon_buf = gdk_pixbuf_add_alpha (tmp_buf, FALSE, 0, 0, 0);
-  g_object_unref (G_OBJECT (tmp_buf));
-
-  width = gdk_pixbuf_get_width (icon_buf);
-  height = gdk_pixbuf_get_height (icon_buf);
-
-  if (mask)
+  if (FRAME_DISPLAY_INFO (f)->red_bits != 8)
+    return 0;
+  XGetGeometry (FRAME_X_DISPLAY (f), pix, &wunused, &iunused, &iunused,
+                &width, &height, &uunused, &depth);
+  if (depth != 24)
+    return 0;
+  XImage *xim = XGetImage (FRAME_X_DISPLAY (f), pix, 0, 0, width, height,
+			   ~0, XYPixmap);
+  if (xim)
     {
-      GdkPixbuf *mask_buf = xg_get_pixbuf_from_pixmap (f, mask);
-      guchar *pixels = gdk_pixbuf_get_pixels (icon_buf);
-      guchar *mask_pixels = gdk_pixbuf_get_pixels (mask_buf);
-      int rowstride = gdk_pixbuf_get_rowstride (icon_buf);
-      int mask_rowstride = gdk_pixbuf_get_rowstride (mask_buf);
-      int y;
+      XImage *xmm = (! mask ? 0
+		     : XGetImage (FRAME_X_DISPLAY (f), mask, 0, 0,
+				  width, height, ~0, XYPixmap));
+      icon_buf = gdk_pixbuf_new (GDK_COLORSPACE_RGB, TRUE, 8, width, height);
+      if (icon_buf)
+	{
+	  guchar *pixels = gdk_pixbuf_get_pixels (icon_buf);
+	  int rowjunkwidth = gdk_pixbuf_get_rowstride (icon_buf) - width * 4;
+	  for (int y = 0; y < height; y++, pixels += rowjunkwidth)
+	    for (int x = 0; x < width; x++)
+	      {
+		unsigned long rgb = XGetPixel (xim, x, y);
+		*pixels++ = (rgb >> 16) & 255;
+		*pixels++ = (rgb >> 8) & 255;
+		*pixels++ = rgb & 255;
+		*pixels++ = xmm && !XGetPixel (xmm, x, y) ? 0 : 255;
+	      }
+	}
 
-      for (y = 0; y < height; ++y)
-        {
-          guchar *iconptr, *maskptr;
-          int x;
-
-          iconptr = pixels + y * rowstride;
-          maskptr = mask_pixels + y * mask_rowstride;
-
-          for (x = 0; x < width; ++x)
-            {
-              /* In a bitmap, RGB is either 255/255/255 or 0/0/0.  Checking
-                 just R is sufficient.  */
-              if (maskptr[0] == 0)
-                iconptr[3] = 0; /* 0, 1, 2 is R, G, B.  3 is alpha.  */
-
-              iconptr += rowstride/width;
-              maskptr += mask_rowstride/width;
-            }
-        }
-
-      g_object_unref (G_OBJECT (mask_buf));
+      if (xmm)
+	XDestroyImage (xmm);
+      XDestroyImage (xim);
     }
 
   return icon_buf;
@@ -517,9 +485,12 @@ get_utf8_string (const char *str)
       if (cp) g_free (cp);
 
       len = strlen (str);
-      if ((min (PTRDIFF_MAX, SIZE_MAX) - len - 1) / 4 < nr_bad)
+      ptrdiff_t alloc;
+      if (INT_MULTIPLY_WRAPV (nr_bad, 4, &alloc)
+	  || INT_ADD_WRAPV (len + 1, alloc, &alloc)
+	  || SIZE_MAX < alloc)
 	memory_full (SIZE_MAX);
-      up = utf8_str = xmalloc (len + nr_bad * 4 + 1);
+      up = utf8_str = xmalloc (alloc);
       p = (unsigned char *)str;
 
       while (! (cp = g_locale_to_utf8 ((char *)p, -1, &bytes_read,
@@ -1297,7 +1268,7 @@ xg_create_frame_widgets (struct frame *f)
     if (! g_signal_handler_find (G_OBJECT (gs),
                                  G_SIGNAL_MATCH_FUNC,
                                  0, 0, 0,
-                                 G_CALLBACK (style_changed_cb),
+                                 (gpointer) G_CALLBACK (style_changed_cb),
                                  0))
       {
         g_signal_connect (G_OBJECT (gs), "notify::gtk-theme-name",
@@ -1829,14 +1800,10 @@ xg_toggle_notify_cb (GObject *gobject, GParamSpec *arg1, gpointer user_data)
 
       if (!!visible != !!toggle_on)
         {
-          g_signal_handlers_block_by_func (G_OBJECT (wtoggle),
-                                           G_CALLBACK (xg_toggle_visibility_cb),
-                                           gobject);
+          gpointer cb = (gpointer) G_CALLBACK (xg_toggle_visibility_cb);
+          g_signal_handlers_block_by_func (G_OBJECT (wtoggle), cb, gobject);
           gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (wtoggle), visible);
-          g_signal_handlers_unblock_by_func
-            (G_OBJECT (wtoggle),
-             G_CALLBACK (xg_toggle_visibility_cb),
-             gobject);
+          g_signal_handlers_unblock_by_func (G_OBJECT (wtoggle), cb, gobject);
         }
       x_gtk_show_hidden_files = visible;
     }
@@ -4081,43 +4048,46 @@ xg_page_setup_dialog (void)
 Lisp_Object
 xg_get_page_setup (void)
 {
-  Lisp_Object result, orientation_symbol;
-  GtkPageOrientation orientation;
+  Lisp_Object orientation_symbol;
 
   if (page_setup == NULL)
     page_setup = gtk_page_setup_new ();
-  result = list4 (Fcons (Qleft_margin,
-			 make_float (gtk_page_setup_get_left_margin (page_setup,
-								     GTK_UNIT_POINTS))),
-		  Fcons (Qright_margin,
-			 make_float (gtk_page_setup_get_right_margin (page_setup,
-								      GTK_UNIT_POINTS))),
-		  Fcons (Qtop_margin,
-			 make_float (gtk_page_setup_get_top_margin (page_setup,
-								    GTK_UNIT_POINTS))),
-		  Fcons (Qbottom_margin,
-			 make_float (gtk_page_setup_get_bottom_margin (page_setup,
-								       GTK_UNIT_POINTS))));
-  result = Fcons (Fcons (Qheight,
-			 make_float (gtk_page_setup_get_page_height (page_setup,
-								     GTK_UNIT_POINTS))),
-		  result);
-  result = Fcons (Fcons (Qwidth,
-			 make_float (gtk_page_setup_get_page_width (page_setup,
-								    GTK_UNIT_POINTS))),
-		  result);
-  orientation = gtk_page_setup_get_orientation (page_setup);
-  if (orientation == GTK_PAGE_ORIENTATION_PORTRAIT)
-    orientation_symbol = Qportrait;
-  else if (orientation == GTK_PAGE_ORIENTATION_LANDSCAPE)
-    orientation_symbol = Qlandscape;
-  else if (orientation == GTK_PAGE_ORIENTATION_REVERSE_PORTRAIT)
-    orientation_symbol = Qreverse_portrait;
-  else if (orientation == GTK_PAGE_ORIENTATION_REVERSE_LANDSCAPE)
-    orientation_symbol = Qreverse_landscape;
-  result = Fcons (Fcons (Qorientation, orientation_symbol), result);
 
-  return result;
+  switch (gtk_page_setup_get_orientation (page_setup))
+    {
+    case GTK_PAGE_ORIENTATION_PORTRAIT:
+      orientation_symbol = Qportrait;
+      break;
+    case GTK_PAGE_ORIENTATION_LANDSCAPE:
+      orientation_symbol = Qlandscape;
+      break;
+    case GTK_PAGE_ORIENTATION_REVERSE_PORTRAIT:
+      orientation_symbol = Qreverse_portrait;
+      break;
+    case GTK_PAGE_ORIENTATION_REVERSE_LANDSCAPE:
+      orientation_symbol = Qreverse_landscape;
+      break;
+    default:
+      eassume (false);
+    }
+
+  return listn (CONSTYPE_HEAP, 7,
+		Fcons (Qorientation, orientation_symbol),
+#define MAKE_FLOAT_PAGE_SETUP(f)  make_float (f (page_setup, GTK_UNIT_POINTS))
+		Fcons (Qwidth,
+		       MAKE_FLOAT_PAGE_SETUP (gtk_page_setup_get_page_width)),
+		Fcons (Qheight,
+		       MAKE_FLOAT_PAGE_SETUP (gtk_page_setup_get_page_height)),
+		Fcons (Qleft_margin,
+		       MAKE_FLOAT_PAGE_SETUP (gtk_page_setup_get_left_margin)),
+		Fcons (Qright_margin,
+		       MAKE_FLOAT_PAGE_SETUP (gtk_page_setup_get_right_margin)),
+		Fcons (Qtop_margin,
+		       MAKE_FLOAT_PAGE_SETUP (gtk_page_setup_get_top_margin)),
+		Fcons (Qbottom_margin,
+		       MAKE_FLOAT_PAGE_SETUP (gtk_page_setup_get_bottom_margin))
+#undef MAKE_FLOAT_PAGE_SETUP
+		);
 }
 
 static void

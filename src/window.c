@@ -1,14 +1,14 @@
 /* Window creation, deletion and examination for GNU Emacs.
    Does not include redisplay.
-   Copyright (C) 1985-1987, 1993-1998, 2000-2015 Free Software
+   Copyright (C) 1985-1987, 1993-1998, 2000-2016 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -35,6 +35,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "dispextern.h"
 #include "blockinput.h"
 #include "termhooks.h"		/* For FRAME_TERMINAL.  */
+#include "xwidget.h"
 #ifdef HAVE_WINDOW_SYSTEM
 #include TERM_HEADER
 #endif /* HAVE_WINDOW_SYSTEM */
@@ -210,7 +211,7 @@ wset_update_mode_line (struct window *w)
 {
   /* If this window is the selected window on its frame, set the
      global variable update_mode_lines, so that x_consider_frame_title
-     will consider this frame's title for rtedisplay.  */
+     will consider this frame's title for redisplay.  */
   Lisp_Object fselected_window = XFRAME (WINDOW_FRAME (w))->selected_window;
 
   if (WINDOWP (fselected_window) && XWINDOW (fselected_window) == w)
@@ -669,7 +670,7 @@ DEFUN ("set-window-combination-limit", Fset_window_combination_limit, Sset_windo
 WINDOW must be a valid window used in horizontal or vertical combination.
 If LIMIT is nil, child windows of WINDOW can be recombined with WINDOW's
 siblings.  LIMIT t means that child windows of WINDOW are never
-(re-)combined with WINDOW's siblings.  Other values are reserved for
+\(re-)combined with WINDOW's siblings.  Other values are reserved for
 future use.  */)
   (Lisp_Object window, Lisp_Object limit)
 {
@@ -1323,7 +1324,7 @@ DEFUN ("coordinates-in-window-p", Fcoordinates_in_window_p,
 WINDOW must be a live window and defaults to the selected one.
 COORDINATES is a cons of the form (X . Y), X and Y being distances
 measured in characters from the upper-left corner of the frame.
-(0 . 0) denotes the character in the upper left corner of the
+\(0 . 0) denotes the character in the upper left corner of the
 frame.
 If COORDINATES are in the text portion of WINDOW,
    the coordinates relative to the window are returned.
@@ -1709,7 +1710,7 @@ of the window.  The remaining elements are omitted if the character after
 POS is fully visible; otherwise, RTOP and RBOT are the number of pixels
 off-window at the top and bottom of the screen line ("row") containing
 POS, ROWH is the visible height of that row, and VPOS is the row number
-(zero-based).  */)
+\(zero-based).  */)
   (Lisp_Object pos, Lisp_Object window, Lisp_Object partially)
 {
   struct window *w;
@@ -3970,9 +3971,11 @@ values.  */)
 }
 
 
-/* Resize frame F's windows when number of lines of F is set to SIZE.
-   HORFLAG means resize windows when number of columns of F is set to
-   SIZE.  PIXELWISE means to interpret SIZE as pixels.  */
+/* Resize frame F's windows when F's width or height is set to SIZE.
+   If HORFLAG is zero, F's width was set to SIZE, otherwise its height
+   was set.  SIZE is interpreted in F's canonical character units
+   (a.k.a. "columns" or "lines"), unless PIXELWISE is non-zero, which
+   means to interpret SIZE in pixel units.  */
 void
 resize_frame_windows (struct frame *f, int size, bool horflag, bool pixelwise)
 {
@@ -4064,37 +4067,6 @@ resize_frame_windows (struct frame *f, int size, bool horflag, bool pixelwise)
 	    {
 	      window_resize_apply (r, horflag);
 	      window_pixel_to_total (r->frame, horflag ? Qt : Qnil);
-#if false /* Let's try without safe sizes and/or killing other windows.  */
-	    }
-	  else
-	    {
-	      /* Finally, try with "safe" minimum sizes.  */
-	      resize_root_window (root, delta, horflag ? Qt : Qnil, Qsafe,
-				  pixelwise ? Qt : Qnil);
-	      if (window_resize_check (r, horflag)
-		  && new_pixel_size == XINT (r->new_pixel))
-		{
-		  window_resize_apply (r, horflag);
-		  window_pixel_to_total (r->frame, horflag ? Qt : Qnil);
-		}
-	      else
-		{
-		  /* We lost.  Delete all windows but the frame's
-		     selected one.  */
-		  root = f->selected_window;
-		  Fdelete_other_windows_internal (root, Qnil);
-		  if (horflag)
-		    {
-		      XWINDOW (root)->total_cols = new_size;
-		      XWINDOW (root)->pixel_width = new_pixel_size;
-		    }
-		  else
-		    {
-		      XWINDOW (root)->total_lines = new_size;
-		      XWINDOW (root)->pixel_height = new_pixel_size;
-		    }
-		}
-#endif /* false */
 	    }
 	}
     }
@@ -4104,7 +4076,7 @@ resize_frame_windows (struct frame *f, int size, bool horflag, bool pixelwise)
       m = XWINDOW (mini);
       if (horflag)
 	{
-	  m->total_cols = size;
+	  m->total_cols = new_size;
 	  m->pixel_width = new_pixel_size;
 	}
       else
@@ -4117,6 +4089,7 @@ resize_frame_windows (struct frame *f, int size, bool horflag, bool pixelwise)
 	}
     }
 
+  FRAME_WINDOW_SIZES_CHANGED (f) = true;
   fset_redisplay (f);
 }
 
@@ -4398,6 +4371,7 @@ Signal an error when WINDOW is the only window on its frame.  */)
 
       /* Block input.  */
       block_input ();
+      xwidget_view_delete_all_in_window (w);
       window_resize_apply (p, horflag);
       /* If this window is referred to by the dpyinfo's mouse
 	 highlight, invalidate that slot to be safe (Bug#9904).  */
@@ -4555,6 +4529,7 @@ grow_mini_window (struct window *w, int delta, bool pixelwise)
 	  /* Enforce full redisplay of the frame.  */
 	  /* FIXME: Shouldn't window--resize-root-window-vertically do it?  */
 	  fset_redisplay (f);
+	  FRAME_WINDOW_SIZES_CHANGED (f) = true;
 	  adjust_frame_glyphs (f);
 	  unblock_input ();
 	}
@@ -4594,6 +4569,7 @@ shrink_mini_window (struct window *w, bool pixelwise)
 	  /* Enforce full redisplay of the frame.  */
 	  /* FIXME: Shouldn't window--resize-root-window-vertically do it?  */
 	  fset_redisplay (f);
+	  FRAME_WINDOW_SIZES_CHANGED (f) = true;
 	  adjust_frame_glyphs (f);
 	  unblock_input ();
 	}
@@ -5007,27 +4983,34 @@ window_scroll_pixel_based (Lisp_Object window, int n, bool whole, bool noerror)
 
   if (n > 0)
     {
+      int last_y = it.last_visible_y - this_scroll_margin - 1;
+
       /* We moved the window start towards ZV, so PT may be now
 	 in the scroll margin at the top.  */
       move_it_to (&it, PT, -1, -1, -1, MOVE_TO_POS);
-      if (IT_CHARPOS (it) == PT && it.current_y >= this_scroll_margin
+      if (IT_CHARPOS (it) == PT
+	  && it.current_y >= this_scroll_margin
+	  && it.current_y <= last_y - WINDOW_HEADER_LINE_HEIGHT (w)
           && (NILP (Vscroll_preserve_screen_position)
 	      || EQ (Vscroll_preserve_screen_position, Qt)))
 	/* We found PT at a legitimate height.  Leave it alone.  */
 	;
-      else if (window_scroll_pixel_based_preserve_y >= 0)
-	{
-	  /* If we have a header line, take account of it.
-	     This is necessary because we set it.current_y to 0, above.  */
-	  move_it_to (&it, -1,
-		      window_scroll_pixel_based_preserve_x,
-		      (window_scroll_pixel_based_preserve_y
-		       - WINDOW_WANTS_HEADER_LINE_P (w)),
-		      -1, MOVE_TO_Y | MOVE_TO_X);
-	  SET_PT_BOTH (IT_CHARPOS (it), IT_BYTEPOS (it));
-	}
       else
 	{
+	  if (window_scroll_pixel_based_preserve_y >= 0)
+	    {
+	      /* Don't enter the scroll margin at the end of the window.  */
+	      int goal_y = min (last_y, window_scroll_pixel_based_preserve_y);
+
+	      /* If we have a header line, take account of it.  This
+		 is necessary because we set it.current_y to 0, above.  */
+	      move_it_to (&it, -1,
+			  window_scroll_pixel_based_preserve_x,
+			  goal_y - WINDOW_HEADER_LINE_HEIGHT (w),
+			  -1, MOVE_TO_Y | MOVE_TO_X);
+	    }
+
+	  /* Get out of the scroll margin at the top of the window.  */
 	  while (it.current_y < this_scroll_margin)
 	    {
 	      int prev = it.current_y;
@@ -5051,7 +5034,7 @@ window_scroll_pixel_based (Lisp_Object window, int n, bool whole, bool noerror)
       /* We moved the window start towards BEGV, so PT may be now
 	 in the scroll margin at the bottom.  */
       move_it_to (&it, PT, -1,
-		  (it.last_visible_y - CURRENT_HEADER_LINE_HEIGHT (w)
+		  (it.last_visible_y - WINDOW_HEADER_LINE_HEIGHT (w)
 		   - this_scroll_margin - 1),
 		  -1,
 		  MOVE_TO_POS | MOVE_TO_Y);
@@ -5102,14 +5085,20 @@ window_scroll_pixel_based (Lisp_Object window, int n, bool whole, bool noerror)
 	;
       else if (window_scroll_pixel_based_preserve_y >= 0)
 	{
+	  int goal_y = min (it.last_visible_y - this_scroll_margin - 1,
+			    window_scroll_pixel_based_preserve_y);
+
+	  /* Don't let the preserved screen Y coordinate put us inside
+	     any of the two margins.  */
+	  if (goal_y < this_scroll_margin)
+	    goal_y = this_scroll_margin;
 	  SET_TEXT_POS_FROM_MARKER (start, w->start);
 	  start_display (&it, w, start);
 	  /* It would be wrong to subtract CURRENT_HEADER_LINE_HEIGHT
 	     here because we called start_display again and did not
 	     alter it.current_y this time.  */
 	  move_it_to (&it, -1, window_scroll_pixel_based_preserve_x,
-		      window_scroll_pixel_based_preserve_y, -1,
-		      MOVE_TO_Y | MOVE_TO_X);
+		      goal_y, -1, MOVE_TO_Y | MOVE_TO_X);
 	  SET_PT_BOTH (IT_CHARPOS (it), IT_BYTEPOS (it));
 	}
       else
@@ -5225,6 +5214,7 @@ window_scroll_line_based (Lisp_Object window, int n, bool whole, bool noerror)
       w->force_start = true;
 
       if (!NILP (Vscroll_preserve_screen_position)
+	  && this_scroll_margin == 0
 	  && (whole || !EQ (Vscroll_preserve_screen_position, Qt)))
 	{
 	  SET_PT_BOTH (pos, pos_byte);
@@ -5250,8 +5240,16 @@ window_scroll_line_based (Lisp_Object window, int n, bool whole, bool noerror)
 			 marker_byte_position (opoint_marker));
 	  else if (!NILP (Vscroll_preserve_screen_position))
 	    {
+	      int nlines = window_scroll_preserve_vpos;
+
 	      SET_PT_BOTH (pos, pos_byte);
-	      Fvertical_motion (original_pos, window, Qnil);
+	      if (window_scroll_preserve_vpos < this_scroll_margin)
+		nlines = this_scroll_margin;
+	      else if (window_scroll_preserve_vpos
+		       >= w->total_lines - this_scroll_margin)
+		nlines = w->total_lines - this_scroll_margin - 1;
+	      Fvertical_motion (Fcons (make_number (window_scroll_preserve_hpos),
+				       make_number (nlines)), window, Qnil);
 	    }
 	  else
 	    SET_PT (top_margin);
@@ -5277,8 +5275,16 @@ window_scroll_line_based (Lisp_Object window, int n, bool whole, bool noerror)
 	    {
 	      if (!NILP (Vscroll_preserve_screen_position))
 		{
+		  int nlines = window_scroll_preserve_vpos;
+
 		  SET_PT_BOTH (pos, pos_byte);
-		  Fvertical_motion (original_pos, window, Qnil);
+		  if (window_scroll_preserve_vpos < this_scroll_margin)
+		    nlines = this_scroll_margin;
+		  else if (window_scroll_preserve_vpos
+			   >= ht - this_scroll_margin)
+		    nlines = ht - this_scroll_margin - 1;
+		  Fvertical_motion (Fcons (make_number (window_scroll_preserve_hpos),
+					   make_number (nlines)), window, Qnil);
 		}
 	      else
 		Fvertical_motion (make_number (-1), window, Qnil);
@@ -7257,7 +7263,7 @@ resizing a window preferably resizes one adjacent window only.
 
 If this variable is t, splitting a window tries to get the space
 proportionally from all windows in the same combination.  This also
-allows to split a window that is otherwise too small or of fixed size.
+allows splitting a window that is otherwise too small or of fixed size.
 Resizing and deleting a window proportionally resize all windows in the
 same combination.
 

@@ -1,14 +1,14 @@
 /* Fundamental definitions for GNU Emacs Lisp interpreter.
 
-Copyright (C) 1985-1987, 1993-1995, 1997-2015 Free Software Foundation,
+Copyright (C) 1985-1987, 1993-1995, 1997-2016 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -2005,7 +2005,7 @@ struct Lisp_Marker
   /* For markers that point somewhere,
      this is used to chain of all the markers in a given buffer.  */
   /* We could remove it and use an array in buffer_text instead.
-     That would also allow to preserve it ordered.  */
+     That would also allow us to preserve it ordered.  */
   struct Lisp_Marker *next;
   /* This is the char position where the marker points.  */
   ptrdiff_t charpos;

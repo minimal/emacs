@@ -1,6 +1,6 @@
 ;;; holidays.el --- holiday functions for the calendar package
 
-;; Copyright (C) 1989-1990, 1992-1994, 1997, 2001-2015 Free Software
+;; Copyright (C) 1989-1990, 1992-1994, 1997, 2001-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Edward M. Reingold <reingold@cs.uiuc.edu>
@@ -346,9 +346,10 @@ The holidays are those in the list `calendar-holidays'."
                          (eval p)
                        (error
                         (display-warning
-                         :error
+                         'holidays
                          (format "Bad holiday list item: %s\nError: %s\n"
-                                 p err))
+                                 p err)
+                         :error)
                         nil))))
            (setq res (append h res))))
      'calendar-date-compare)))

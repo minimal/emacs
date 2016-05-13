@@ -1,13 +1,13 @@
 /* Simple built-in editing commands.
 
-Copyright (C) 1985, 1993-1998, 2001-2015 Free Software Foundation, Inc.
+Copyright (C) 1985, 1993-1998, 2001-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -106,7 +106,7 @@ right or to the left on the screen.  This is in contrast with
 DEFUN ("forward-line", Fforward_line, Sforward_line, 0, 1, "^p",
        doc: /* Move N lines forward (backward if N is negative).
 Precisely, if point is on line I, move to the start of line I + N
-("start of line" in the logical order).
+\("start of line" in the logical order).
 If there isn't room, go as far as possible (no error).
 
 Returns the count of lines left to move.  If moving forward,
@@ -218,36 +218,6 @@ to t.  */)
   return Qnil;
 }
 
-static int nonundocount;
-
-static void
-remove_excessive_undo_boundaries (void)
-{
-  bool remove_boundary = true;
-
-  if (!EQ (Vthis_command, KVAR (current_kboard, Vlast_command)))
-    nonundocount = 0;
-
-  if (NILP (Vexecuting_kbd_macro))
-    {
-      if (nonundocount <= 0 || nonundocount >= 20)
-	{
-	  remove_boundary = false;
-	  nonundocount = 0;
-	}
-      nonundocount++;
-    }
-
-  if (remove_boundary
-      && CONSP (BVAR (current_buffer, undo_list))
-      && NILP (XCAR (BVAR (current_buffer, undo_list)))
-      /* Only remove auto-added boundaries, not boundaries
-	 added by explicit calls to undo-boundary.  */
-      && EQ (BVAR (current_buffer, undo_list), last_undo_boundary))
-    /* Remove the undo_boundary that was just pushed.  */
-    bset_undo_list (current_buffer, XCDR (BVAR (current_buffer, undo_list)));
-}
-
 DEFUN ("delete-char", Fdelete_char, Sdelete_char, 1, 2, "p\nP",
        doc: /* Delete the following N characters (previous if N is negative).
 Optional second arg KILLFLAG non-nil means kill instead (save in kill ring).
@@ -263,7 +233,7 @@ because it respects values of `delete-active-region' and `overwrite-mode'.  */)
   CHECK_NUMBER (n);
 
   if (eabs (XINT (n)) < 2)
-    remove_excessive_undo_boundaries ();
+    call0 (Qundo_auto_amalgamate);
 
   pos = PT + XINT (n);
   if (NILP (killflag))
@@ -309,20 +279,19 @@ At the end, it runs `post-self-insert-hook'.  */)
     error ("Negative repetition argument %"pI"d", XINT (n));
 
   if (XFASTINT (n) < 2)
-    remove_excessive_undo_boundaries ();
+    call0 (Qundo_auto_amalgamate);
 
   /* Barf if the key that invoked this was not a character.  */
   if (!CHARACTERP (last_command_event))
     bitch_at_user ();
-  else
-    {
-      int character = translate_char (Vtranslation_table_for_input,
-				      XINT (last_command_event));
-      int val = internal_self_insert (character, XFASTINT (n));
-      if (val == 2)
-	nonundocount = 0;
-      frame_make_pointer_invisible (SELECTED_FRAME ());
-    }
+  else {
+    int character = translate_char (Vtranslation_table_for_input,
+				    XINT (last_command_event));
+    int val = internal_self_insert (character, XFASTINT (n));
+    if (val == 2)
+      Fset (Qundo_auto__this_command_amalgamating, Qnil);
+    frame_make_pointer_invisible (SELECTED_FRAME ());
+  }
 
   return Qnil;
 }
@@ -525,6 +494,10 @@ internal_self_insert (int c, EMACS_INT n)
 void
 syms_of_cmds (void)
 {
+  DEFSYM (Qundo_auto_amalgamate, "undo-auto-amalgamate");
+  DEFSYM (Qundo_auto__this_command_amalgamating,
+          "undo-auto--this-command-amalgamating");
+
   DEFSYM (Qkill_forward_chars, "kill-forward-chars");
 
   /* A possible value for a buffer's overwrite-mode variable.  */
@@ -554,7 +527,6 @@ keys_of_cmds (void)
 {
   int n;
 
-  nonundocount = 0;
   initial_define_key (global_map, Ctl ('I'), "self-insert-command");
   for (n = 040; n < 0177; n++)
     initial_define_key (global_map, n, "self-insert-command");

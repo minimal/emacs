@@ -1,6 +1,6 @@
 ;;; avl-tree.el --- balanced binary trees, AVL-trees  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1995, 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1995, 2007-2016 Free Software Foundation, Inc.
 
 ;; Author: Per Cederqvist <ceder@lysator.liu.se>
 ;;         Inge Wallin <inge@lysator.liu.se>
@@ -561,7 +561,7 @@ Note that if you don't care about the order in which FUNCTION is
 applied, just that the resulting list is in the correct order,
 then
 
-  (avl-tree-mapf function 'cons tree (not reverse))
+  (avl-tree-mapf function \\='cons tree (not reverse))
 
 is more efficient."
   (nreverse (avl-tree-mapf fun 'cons tree reverse)))

@@ -1,6 +1,6 @@
 ;;; tramp-gvfs.el --- Tramp access functions for GVFS daemon
 
-;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2016 Free Software Foundation, Inc.
 
 ;; Author: Michael Albinus <michael.albinus@gmx.de>
 ;; Keywords: comm, processes
@@ -86,7 +86,7 @@
 
 ;; Restrictions:
 
-;; * The current GVFS implementation does not allow to write on the
+;; * The current GVFS implementation does not allow writing on the
 ;;   remote bluetooth device via OBEX.
 ;;
 ;; * Two shares of the same SMB server cannot be mounted in parallel.
@@ -430,10 +430,10 @@ Every entry is a list (NAME ADDRESS).")
     (file-acl . ignore)
     (file-attributes . tramp-gvfs-handle-file-attributes)
     (file-directory-p . tramp-gvfs-handle-file-directory-p)
-    ;; `file-equal-p' performed by default handler.
+    (file-equal-p . tramp-handle-file-equal-p)
     (file-executable-p . tramp-gvfs-handle-file-executable-p)
     (file-exists-p . tramp-handle-file-exists-p)
-    ;; `file-in-directory-p' performed by default handler.
+    (file-in-directory-p . tramp-handle-file-in-directory-p)
     (file-local-copy . tramp-gvfs-handle-file-local-copy)
     (file-modes . tramp-handle-file-modes)
     (file-name-all-completions . tramp-gvfs-handle-file-name-all-completions)
@@ -1617,7 +1617,11 @@ connection if a previous connection has died for some reason."
 	;; is marked with the fuse-mountpoint "/".  We shall react.
 	(when (string-equal
 	       (tramp-get-file-property vec "/" "fuse-mountpoint" "") "/")
-	  (tramp-error vec 'file-error "FUSE mount denied")))))
+	  (tramp-error vec 'file-error "FUSE mount denied"))
+
+	;; Mark it as connected.
+	(tramp-set-connection-property
+	 (tramp-get-connection-process vec) "connected" t))))
 
   ;; In `tramp-check-cached-permissions', the connection properties
   ;; {uig,gid}-{integer,string} are used.  We set them to their local
@@ -1740,20 +1744,25 @@ be used."
        (list user host)))
    (zeroconf-list-services service)))
 
+;; We use the TRIM argument of `split-string', which exist since Emacs
+;; 24.4.  I mask this for older Emacs versions, there is no harm.
 (defun tramp-gvfs-parse-device-names (service)
   "Return a list of (user host) tuples allowed to access.
 This uses \"avahi-browse\" in case D-Bus is not enabled in Avahi."
   (let ((result
-	 (split-string
-	  (shell-command-to-string (format "avahi-browse -trkp %s" service))
-	  "[\n\r]+" 'omit "^\\+;.*$")))
+	 (ignore-errors
+	   (tramp-compat-funcall
+	    'split-string
+	    (shell-command-to-string (format "avahi-browse -trkp %s" service))
+	    "[\n\r]+" 'omit "^\\+;.*$"))))
     (tramp-compat-delete-dups
      (mapcar
       (lambda (x)
 	(let* ((list (split-string x ";"))
 	       (host (nth 6 list))
 	       (port (nth 8 list))
-	       (text (split-string (nth 9 list) "\" \"" 'omit "\""))
+	       (text (tramp-compat-funcall
+		      'split-string (nth 9 list) "\" \"" 'omit "\""))
 	       user)
 ;	  (when (and port (not (string-equal port "0")))
 ;	    (setq host (format "%s%s%s" host tramp-prefix-port-regexp port)))

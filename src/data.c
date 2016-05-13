@@ -1,13 +1,13 @@
 /* Primitive operations on Lisp data types for GNU Emacs Lisp interpreter.
-   Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2015 Free Software
+   Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2016 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -223,6 +223,10 @@ for example, (type-of 1) returns `integer'.  */)
           return Qfloat;
         case Lisp_Misc_Finalizer:
           return Qfinalizer;
+#ifdef HAVE_MODULES
+	case Lisp_Misc_User_Ptr:
+	  return Quser_ptr;
+#endif
 	default:
 	  emacs_abort ();
 	}
@@ -423,6 +427,17 @@ DEFUN ("markerp", Fmarkerp, Smarkerp, 1, 1, 0,
     return Qt;
   return Qnil;
 }
+
+#ifdef HAVE_MODULES
+DEFUN ("user-ptrp", Fuser_ptrp, Suser_ptrp, 1, 1, 0,
+       doc: /* Return t if OBJECT is a module user pointer.  */)
+     (Lisp_Object object)
+{
+  if (USER_PTRP (object))
+    return Qt;
+  return Qnil;
+}
+#endif
 
 DEFUN ("subrp", Fsubrp, Ssubrp, 1, 1, 0,
        doc: /* Return t if OBJECT is a built-in function.  */)
@@ -1240,6 +1255,7 @@ set_internal (Lisp_Object symbol, Lisp_Object newval, Lisp_Object where,
 	return;
     }
 
+  maybe_set_redisplay (symbol);
   sym = XSYMBOL (symbol);
 
  start:
@@ -1657,7 +1673,7 @@ DEFUN ("make-local-variable", Fmake_local_variable, Smake_local_variable,
        1, 1, "vMake Local Variable: ",
        doc: /* Make VARIABLE have a separate value in the current buffer.
 Other buffers will continue to share a common default value.
-(The buffer-local value of VARIABLE starts out as the same value
+\(The buffer-local value of VARIABLE starts out as the same value
 VARIABLE previously had.  If VARIABLE was void, it remains void.)
 Return VARIABLE.
 
@@ -2408,6 +2424,33 @@ DEFUN ("/=", Fneq, Sneq, 2, 2, 0,
   return arithcompare (num1, num2, ARITH_NOTEQUAL);
 }
 
+/* Convert the integer I to a cons-of-integers, where I is not in
+   fixnum range.  */
+
+#define INTBIG_TO_LISP(i, extremum)				    \
+  (eassert (FIXNUM_OVERFLOW_P (i)),				    \
+   (! (FIXNUM_OVERFLOW_P ((extremum) >> 16)			    \
+       && FIXNUM_OVERFLOW_P ((i) >> 16))			    \
+    ? Fcons (make_number ((i) >> 16), make_number ((i) & 0xffff))   \
+    : ! (FIXNUM_OVERFLOW_P ((extremum) >> 16 >> 24)		    \
+	 && FIXNUM_OVERFLOW_P ((i) >> 16 >> 24))		    \
+    ? Fcons (make_number ((i) >> 16 >> 24),			    \
+	     Fcons (make_number ((i) >> 16 & 0xffffff),		    \
+		    make_number ((i) & 0xffff)))		    \
+    : make_float (i)))
+
+Lisp_Object
+intbig_to_lisp (intmax_t i)
+{
+  return INTBIG_TO_LISP (i, INTMAX_MIN);
+}
+
+Lisp_Object
+uintbig_to_lisp (uintmax_t i)
+{
+  return INTBIG_TO_LISP (i, UINTMAX_MAX);
+}
+
 /* Convert the cons-of-integers, integer, or float value C to an
    unsigned value with maximum value MAX.  Signal an error if C does not
    have a valid format or is out of range.  */
@@ -2630,30 +2673,16 @@ arith_driver (enum arithop code, ptrdiff_t nargs, Lisp_Object *args)
       switch (code)
 	{
 	case Aadd:
-	  if (INT_ADD_OVERFLOW (accum, next))
-	    {
-	      overflow = 1;
-	      accum &= INTMASK;
-	    }
-	  accum += next;
+	  overflow |= INT_ADD_WRAPV (accum, next, &accum);
 	  break;
 	case Asub:
-	  if (INT_SUBTRACT_OVERFLOW (accum, next))
-	    {
-	      overflow = 1;
-	      accum &= INTMASK;
-	    }
-	  accum = argnum ? accum - next : nargs == 1 ? - next : next;
+	  if (! argnum)
+	    accum = nargs == 1 ? - next : next;
+	  else
+	    overflow |= INT_SUBTRACT_WRAPV (accum, next, &accum);
 	  break;
 	case Amult:
-	  if (INT_MULTIPLY_OVERFLOW (accum, next))
-	    {
-	      EMACS_UINT a = accum, b = next, ab = a * b;
-	      overflow = 1;
-	      accum = ab & INTMASK;
-	    }
-	  else
-	    accum *= next;
+	  overflow |= INT_MULTIPLY_WRAPV (accum, next, &accum);
 	  break;
 	case Adiv:
 	  if (! (argnum || nargs == 1))
@@ -2662,7 +2691,10 @@ arith_driver (enum arithop code, ptrdiff_t nargs, Lisp_Object *args)
 	    {
 	      if (next == 0)
 		xsignal0 (Qarith_error);
-	      accum /= next;
+	      if (INT_DIVIDE_OVERFLOW (accum, next))
+		overflow = true;
+	      else
+		accum /= next;
 	    }
 	  break;
 	case Alogand:
@@ -3461,6 +3493,9 @@ syms_of_data (void)
   DEFSYM (Qbool_vector_p, "bool-vector-p");
   DEFSYM (Qchar_or_string_p, "char-or-string-p");
   DEFSYM (Qmarkerp, "markerp");
+#ifdef HAVE_MODULES
+  DEFSYM (Quser_ptrp, "user-ptrp");
+#endif
   DEFSYM (Qbuffer_or_string_p, "buffer-or-string-p");
   DEFSYM (Qinteger_or_marker_p, "integer-or-marker-p");
   DEFSYM (Qfboundp, "fboundp");
@@ -3552,6 +3587,9 @@ syms_of_data (void)
   DEFSYM (Qmarker, "marker");
   DEFSYM (Qoverlay, "overlay");
   DEFSYM (Qfinalizer, "finalizer");
+#ifdef HAVE_MODULES
+  DEFSYM (Quser_ptr, "user-ptr");
+#endif
   DEFSYM (Qfloat, "float");
   DEFSYM (Qwindow_configuration, "window-configuration");
   DEFSYM (Qprocess, "process");
@@ -3666,6 +3704,9 @@ syms_of_data (void)
   defsubr (&Sbyteorder);
   defsubr (&Ssubr_arity);
   defsubr (&Ssubr_name);
+#ifdef HAVE_MODULES
+  defsubr (&Suser_ptrp);
+#endif
 
   defsubr (&Sbool_vector_exclusive_or);
   defsubr (&Sbool_vector_union);

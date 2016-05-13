@@ -1,6 +1,6 @@
 ;;; mh-seq.el --- MH-E sequences support
 
-;; Copyright (C) 1993, 1995, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993, 1995, 2001-2016 Free Software Foundation, Inc.
 
 ;; Author: Bill Wohler <wohler@newt.com>
 ;; Maintainer: Bill Wohler <wohler@newt.com>
@@ -555,7 +555,7 @@ change."
 ;;;###mh-autoload
 (defun mh-valid-view-change-operation-p (op)
   "Check if the view change operation can be performed.
-OP is one of 'widen and 'unthread."
+OP is one of `widen' and `unthread'."
   (cond ((eq (car mh-view-ops) op)
          (pop mh-view-ops))
         (t nil)))

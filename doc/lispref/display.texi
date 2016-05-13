@@ -1,6 +1,6 @@
 @c -*- mode: texinfo; coding: utf-8 -*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1995, 1998-2015 Free Software Foundation, Inc.
+@c Copyright (C) 1990-1995, 1998-2016 Free Software Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Display
 @chapter Emacs Display
@@ -27,12 +27,14 @@ that Emacs presents to the user.
 * Window Dividers::     Separating windows visually.
 * Display Property::    Enabling special display features.
 * Images::              Displaying images in Emacs buffers.
+* Xwidgets::            Displaying native widgets in Emacs buffers.
 * Buttons::             Adding clickable buttons to Emacs buffers.
 * Abstract Display::    Emacs's Widget for Object Collections.
 * Blinking::            How Emacs shows the matching open parenthesis.
 * Character Display::   How Emacs displays individual characters.
 * Beeping::             Audible signal to the user.
 * Window Systems::      Which window system is being used.
+* Tooltips::            Tooltip display in Emacs.
 * Bidirectional Display:: Display of bidirectional scripts, such as
                              Arabic and Farsi.
 @end menu
@@ -46,8 +48,9 @@ that Emacs presents to the user.
 contents of a given frame (@pxref{Frames}).  This is useful if the
 screen is corrupted.
 
-@defun redraw-frame frame
-This function clears and redisplays frame @var{frame}.
+@defun redraw-frame &optional frame
+This function clears and redisplays frame @var{frame}.  If @var{frame}
+is omitted or nil, it redraws the selected frame.
 @end defun
 
   Even more powerful is @code{redraw-display}:
@@ -95,11 +98,6 @@ redisplay proceeded to completion; it could have been preempted by
 newly arriving input.
 @end defun
 
-@defvar pre-redisplay-function
-A function run just before redisplay.  It is called with one argument,
-the set of windows to redisplay.
-@end defvar
-
   Although @code{redisplay} tries immediately to redisplay, it does
 not change how Emacs decides which parts of its frame(s) to redisplay.
 By contrast, the following function adds certain windows to the
@@ -116,6 +114,19 @@ windows displaying that buffer are to be updated.  If @var{object} is
 This function does not do a redisplay immediately; Emacs does that as
 it waits for input, or when the function @code{redisplay} is called.
 @end defun
+
+@defvar pre-redisplay-function
+A function run just before redisplay.  It is called with one argument,
+the set of windows to be redisplayed.  The set can be @code{nil},
+meaning only the selected window, or @code{t}, meaning all the
+windows.
+@end defvar
+
+@defvar pre-redisplay-functions
+This hook is run just before redisplay.  It is called once in each
+window that is about to be redisplayed, with @code{current-buffer} set
+to the buffer displayed in that window.
+@end defvar
 
 @node Truncation
 @section Truncation
@@ -330,7 +341,7 @@ support them, then @code{message-box} uses the echo area, like
 @code{message}.
 @end defun
 
-@defun display-message-or-buffer message &optional buffer-name not-this-window frame
+@defun display-message-or-buffer message &optional buffer-name action frame
 This function displays the message @var{message}, which may be either a
 string or a buffer.  If it is shorter than the maximum height of the
 echo area, as defined by @code{max-mini-window-height}, it is displayed
@@ -346,7 +357,7 @@ pop-up buffer is used, defaulting to @file{*Message*}.  In the case
 where @var{message} is a string and displayed in the echo area, it is
 not specified whether the contents are inserted into the buffer anyway.
 
-The optional arguments @var{not-this-window} and @var{frame} are as for
+The optional arguments @var{action} and @var{frame} are as for
 @code{display-buffer}, and only used if a buffer is displayed.
 @end defun
 
@@ -1713,7 +1724,8 @@ invisible, which means that it does not appear on the screen.
 @item intangible
 @kindex intangible @r{(overlay property)}
 The @code{intangible} property on an overlay works just like the
-@code{intangible} text property.  @xref{Special Properties}, for details.
+@code{intangible} text property.  It is obsolete.  @xref{Special
+Properties}, for details.
 
 @item isearch-open-invisible
 This property tells incremental search how to make an invisible overlay
@@ -1889,12 +1901,13 @@ end of the result if it falls short of @var{width}.  It is also used at
 the beginning of the result if one multi-column character in
 @var{string} extends across the column @var{start-column}.
 
+@vindex truncate-string-ellipsis
 If @var{ellipsis} is non-@code{nil}, it should be a string which will
 replace the end of @var{string} (including any padding) if it extends
 beyond @var{width}, unless the display width of @var{string} is equal
 to or less than the display width of @var{ellipsis}.  If
 @var{ellipsis} is non-@code{nil} and not a string, it stands for
-@code{"..."}.
+the value of the variable @code{truncate-string-ellipsis}.
 
 @example
 (truncate-string-to-width "\tab\t" 12 4)
@@ -2675,8 +2688,14 @@ considered, until a specified attribute is found.  To ensure that the
 return value is always specified, use a value of @code{default} for
 @var{inherit}.
 
-@defun face-font face &optional frame
+@defun face-font face &optional frame character
 This function returns the name of the font of face @var{face}.
+
+If the optional argument @var{frame} is specified, it returns the name
+of the font of @var{face} for that frame.  If @var{frame} is omitted or
+@code{nil}, the selected frame is used.  And, in this case, if the
+optional third argument @var{character} is supplied, it returns the font
+name used for @var{character}.
 @end defun
 
 @defun face-foreground face &optional frame inherit
@@ -3016,7 +3035,11 @@ it is commonly assigned to the @code{mouse-face} property for cursor
 highlighting (@pxref{Special Properties}).
 
 @item match
-For text matching a search command.
+@itemx isearch
+@itemx lazy-highlight
+For text matching (respectively) permanent search matches, interactive
+search matches, and lazy highlighting other matches than the current
+interactive one.
 
 @item error
 @itemx warning
@@ -3659,6 +3682,39 @@ tag (or @code{nil}, which stands for the default langsys), and each
 @end table
 @end defun
 
+@cindex font information for layout
+The following four functions return size information about fonts used
+by various faces, allowing various layout considerations in Lisp
+programs.  These functions take face remapping into consideration,
+returning information about the remapped face, if the face in question
+was remapped.  @xref{Face Remapping}.
+
+@defun default-font-width
+This function returns the average width in pixels of the font used by
+the current buffer's default face.
+@end defun
+
+@defun default-font-height
+This function returns the height in pixels of the font used by the
+current buffer's default face.
+@end defun
+
+@defun window-font-width &optional window face
+This function returns the average width in pixels for the font used by
+@var{face} in @var{window}.  The specified @var{window} must be a live
+window.  If @code{nil} or omitted, @var{window} defaults to the
+selected window, and @var{face} defaults to the default face in
+@var{window}.
+@end defun
+
+@defun window-font-height &optional window face
+This function returns the height in pixels for the font used by
+@var{face} in @var{window}.  The specified @var{window} must be a live
+window.  If @code{nil} or omitted, @var{window} defaults to the
+selected window, and @var{face} defaults to the default face in
+@var{window}.
+@end defun
+
 @node Fringes
 @section Fringes
 @cindex fringes
@@ -4260,7 +4316,7 @@ divider ends above the bottom divider.
    Dividers can be dragged with the mouse and are therefore useful for
 adjusting the sizes of adjacent windows with the mouse.  They also serve
 to visually set apart adjacent windows when no scroll bars or mode lines
-are present.  The following three faces allow to customize the
+are present.  The following three faces allow the customization of the
 appearance of dividers:
 
 @table @code
@@ -5280,7 +5336,7 @@ returned.  If no specification is satisfied, @code{nil} is returned.
 The image is looked for in @code{image-load-path}.
 @end defun
 
-@defvar image-load-path
+@defopt image-load-path
 This variable's value is a list of locations in which to search for
 image files.  If an element is a string or a variable symbol whose
 value is a string, the string is taken to be the name of a directory
@@ -5299,7 +5355,7 @@ should specify the image as follows:
 @example
 (defimage foo-image '((:type xpm :file "foo/bar.xpm")))
 @end example
-@end defvar
+@end defopt
 
 @defun image-load-path-for-library library image &optional path no-error
 This function returns a suitable search path for images used by the
@@ -5568,6 +5624,117 @@ If the value is @code{nil}, Emacs does not remove images from the cache
 except when you explicitly clear it.  This mode can be useful for
 debugging.
 @end defvar
+
+@node Xwidgets
+@section Embedded Native Widgets
+@cindex xwidget
+@cindex embedded widgets
+@cindex webkit browser widget
+
+  Emacs is able to display native widgets, such as GTK WebKit widgets,
+in Emacs buffers when it was built with the necessary support
+libraries and is running on a graphical terminal.  To test whether
+Emacs supports display of embedded widgets, check that the
+@code{xwidget-internal} feature is available (@pxref{Named Features}).
+
+  To display an embedded widget in a buffer, you must first create an
+xwidget object, and then use that object as the display specifier
+in a @code{display} text or overlay property (@pxref{Display
+Property}).
+
+@defun make-xwidget type title width height arguments &optional buffer
+This creates and returns an xwidget object.  If
+@var{buffer} is omitted or @code{nil}, it defaults to the current
+buffer.  If @var{buffer} names a buffer that doesn't exist, it will be
+created.  The @var{type} identifies the type of the xwidget component,
+it can be one of the following:
+
+@table @code
+@item webkit
+The WebKit component.
+@end table
+
+The @var{width} and @var{height} arguments specify the widget size in
+pixels, and @var{title}, a string, specifies its title.
+@end defun
+
+@defun xwidgetp object
+This function returns @code{t} if @var{object} is an xwidget,
+@code{nil} otherwise.
+@end defun
+
+@defun xwidget-plist xwidget
+This function returns the property list of @var{xwidget}.
+@end defun
+
+@defun set-xwidget-plist xwidget plist
+This function replaces the property list of @var{xwidget} with a new
+property list given by @var{plist}.
+@end defun
+
+@defun xwidget-buffer xwidget
+This function returns the buffer of @var{xwidget}.
+@end defun
+
+@defun get-buffer-xwidgets buffer
+This function returns a list of xwidget objects associated with the
+@var{buffer}, which can be specified as a buffer object or a name of
+an existing buffer, a string.  The value is @code{nil} if @var{buffer}
+contains no xwidgets.
+@end defun
+
+@defun xwidget-webkit-goto-uri xwidget uri
+This function browses the specified @var{uri} in the given
+@var{xwidget}.  The @var{uri} is a string that specifies the name of a
+file or a URL.  @c FIXME: What else can a URI specify in this context?
+@end defun
+
+@defun xwidget-webkit-execute-script xwidget script
+This function causes the browser widget specified by @var{xwidget} to
+execute the specified JavaScript @code{script}.
+@end defun
+
+@defun xwidget-webkit-execute-script-rv xwidget script &optional default
+This function executes the specified @var{script} like
+@code{xwidget-webkit-execute-script} does, but it also returns the
+script's return value as a string.  If @var{script} doesn't return a
+value, this function returns @var{default}, or @code{nil} if
+@var{default} was omitted.
+@end defun
+
+@defun xwidget-webkit-get-title xwidget
+This function returns the title of @var{xwidget} as a string.
+@end defun
+
+@defun xwidget-resize xwidget width height
+This function resizes the specified @var{xwidget} to the size
+@var{width}x@var{height} pixels.
+@end defun
+
+@defun xwidget-size-request xwidget
+This function returns the desired size of @var{xwidget} as a list of
+the form @code{(@var{width} @var{height})}.  The dimensions are in
+pixels.
+@end defun
+
+@defun xwidget-info xwidget
+This function returns the attributes of @var{xwidget} as a vector of
+the form @code{[@var{type} @var{title} @var{width} @var{height}]}.
+The attributes are usually determined by @code{make-xwidget} when the
+xwidget is created.
+@end defun
+
+@defun set-xwidget-query-on-exit-flag xwidget flag
+This function allows you to arrange that Emacs will ask the user for
+confirmation before exiting or before killing a buffer that has
+@var{xwidget} associated with it.  If @var{flag} is non-@code{nil},
+Emacs will query the user, otherwise it will not.
+@end defun
+
+@defun xwidget-query-on-exit-flag xwidget
+This function returns the current setting of @var{xwidget}s
+query-on-exit flag, either @code{t} or @code{nil}.
+@end defun
 
 @node Buttons
 @section Buttons
@@ -6743,12 +6910,12 @@ provided the terminal's Termcap entry defines the visible bell
 capability (@samp{vb}).
 @end defopt
 
-@defvar ring-bell-function
+@defopt ring-bell-function
 If this is non-@code{nil}, it specifies how Emacs should ring the
 bell.  Its value should be a function of no arguments.  If this is
 non-@code{nil}, it takes precedence over the @code{visible-bell}
 variable.
-@end defvar
+@end defopt
 
 @node Window Systems
 @section Window Systems
@@ -6801,6 +6968,81 @@ graphic displays.  That is because @code{window-system} is not a good
 indicator of Emacs capabilities on a given display type.  Instead, use
 @code{display-graphic-p} or any of the other @code{display-*-p}
 predicates described in @ref{Display Feature Testing}.
+
+@node Tooltips
+@section Tooltips
+@cindex tooltips
+@dfn{Tooltips} are special frames (@pxref{Frames}) that are used to
+display helpful hints (a.k.a.@: ``tips'') related to the current
+position of the mouse pointer.  Emacs uses tooltips to display help
+strings about active portions of text (@pxref{Special Properties}) and
+about various UI elements, such as menu items (@pxref{Extended Menu
+Items}) and tool-bar buttons (@pxref{Tool Bar}).
+
+@defun tooltip-mode
+Tooltip Mode is a minor mode that enables display of tooltips.
+Turning off this mode causes the tooltips be displayed in the echo
+area.  On text-mode (a.k.a.@: ``TTY'') frames, tooltips are always
+displayed in the echo area.
+@end defun
+
+@vindex x-gtk-use-system-tooltips
+When Emacs is built with GTK+ support, it by default displays tooltips
+using GTK+ functions, and the appearance of the tooltips is then
+controlled by GTK+ settings.  GTK+ tooltips can be disabled by
+changing the value of the variable @code{x-gtk-use-system-tooltips} to
+@code{nil}.  The rest of this subsection describes how to control
+non-GTK+ tooltips, which are presented by Emacs itself.
+
+Since tooltips are special frames, they have their frame parameters
+(@pxref{Frame Parameters}).  Unlike other frames, the frame parameters
+for tooltips are stored in a special variable.
+
+@defvar tooltip-frame-parameters
+This customizable option holds the frame parameters used for
+displaying tooltips.  Any font and color parameters are ignored, and
+the corresponding attributes of the @code{tooltip} face are used
+instead.  If @code{left} or @code{top} parameters are included, they
+are used as absolute frame-relative coordinates where the tooltip
+should be shown.  (Mouse-relative position of the tooltip can be
+customized using the variables described in @ref{Tooltips,,, emacs,
+The GNU Emacs Manual}.)  Note that the @code{left} and @code{top}
+parameters, if present, override the values of mouse-relative offsets.
+@end defvar
+
+@vindex tooltip@r{ face}
+The @code{tooltip} face determines the appearance of text shown in
+tooltips.  It should generally use a variable-pitch font of size that
+is preferably smaller than the default frame font.
+
+@findex tooltip-help-tips
+@defvar tooltip-functions
+This abnormal hook is a list of functions to call when Emacs needs to
+display a tooltip.  Each function is called with a single argument
+@var{event} which is a copy of the last mouse movement event.  If a
+function on this list actually displays the tooltip, it should return
+non-@code{nil}, and then the rest of the functions will not be
+called.  The default value of this variable is a single function
+@code{tooltip-help-tips}.
+@end defvar
+
+If you write your own function to be put on the
+@code{tooltip-functions} list, you may need to know the buffer of the
+mouse event that triggered the tooltip display.  The following
+function provides that information.
+
+@defun tooltip-event-buffer event
+This function returns the buffer over which @var{event} occurred.
+Call it with the argument of the function from
+@code{tooltip-functions} to obtain the buffer whose text triggered the
+tooltip.  Note that the event might occur not over a buffer (e.g.,
+over the tool bar), in which case this function will return
+@code{nil}.
+@end defun
+
+Other aspects of tooltip display are controlled by several
+customizable settings; see @ref{Tooltips,,, emacs, The GNU Emacs
+Manual}.
 
 @node Bidirectional Display
 @section Bidirectional Display

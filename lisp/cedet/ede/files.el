@@ -1,6 +1,6 @@
 ;;; ede/files.el --- Associate projects with files and directories.
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2016 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 
@@ -304,7 +304,7 @@ Do this whenever a new project is created, as opposed to loaded."
 ;; instead so that -P can be obsoleted.
 (defun ede-directory-project-p (dir &optional force)
   "Return a project description object if DIR is in a project.
-Optional argument FORCE means to ignore a hash-hit of 'nomatch.
+Optional argument FORCE means to ignore a hash-hit of `nomatch'.
 This depends on an up to date `ede-project-class-files' variable.
 Any directory that contains the file .ede-ignore will always
 return nil.

@@ -1,6 +1,6 @@
 ;;; gud.el --- Grand Unified Debugger mode for running GDB and other debuggers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992-1996, 1998, 2000-2015 Free Software Foundation,
+;; Copyright (C) 1992-1996, 1998, 2000-2016 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Eric S. Raymond <esr@snark.thyrsus.com>
@@ -1742,6 +1742,7 @@ and source-file directory for your debugger."
 (defcustom gud-guiler-command-name "guile"
   "File name for executing the Guile debugger.
 This should be an executable on your path, or an absolute file name."
+  :version "25.1"
   :type 'string
   :group 'gud)
 
@@ -3080,7 +3081,7 @@ the character after the end of the expr."
   "Scan from SPAN-START to SPAN-END for punctuation characters.
 If `->' is found, return `?.'.  If `.' is found, return `?.'.
 If any other punctuation is found, return `??'.
-If no punctuation is found, return `? '."
+If no punctuation is found, return `?\\s'."
   (let ((result ?\s)
 	(syntax))
     (while (< span-start span-end)
@@ -3405,7 +3406,7 @@ it if ARG is omitted or nil."
 (defcustom gud-tooltip-modes '(gud-mode c-mode c++-mode fortran-mode
 					python-mode)
   "List of modes for which to enable GUD tooltips."
-  :type 'sexp
+  :type '(repeat (symbol :tag "Major mode"))
   :group 'gud
   :group 'tooltip)
 
@@ -3420,6 +3421,7 @@ it if ARG is omitted or nil."
 Forms in the list are combined with AND.  The default is to display
 only tooltips in the buffer containing the overlay arrow."
   :type 'sexp
+  :risky t
   :group 'gud
   :group 'tooltip)
 

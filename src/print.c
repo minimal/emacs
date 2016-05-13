@@ -1,14 +1,14 @@
 /* Lisp object printing and output streams.
 
-Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2015 Free Software
+Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2016 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -32,6 +32,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "disptab.h"
 #include "intervals.h"
 #include "blockinput.h"
+#include "xwidget.h"
 
 #include <c-ctype.h>
 #include <float.h>
@@ -200,6 +201,13 @@ printchar_to_stream (unsigned int ch, FILE *stream)
 {
   Lisp_Object dv IF_LINT (= Qnil);
   ptrdiff_t i = 0, n = 1;
+  Lisp_Object coding_system = Vlocale_coding_system;
+  bool encode_p = false;
+
+  if (!NILP (Vcoding_system_for_write))
+    coding_system = Vcoding_system_for_write;
+  if (!NILP (coding_system))
+    encode_p = true;
 
   if (CHAR_VALID_P (ch) && DISP_TABLE_P (Vstandard_display_table))
     {
@@ -228,8 +236,11 @@ printchar_to_stream (unsigned int ch, FILE *stream)
 	  unsigned char mbstr[MAX_MULTIBYTE_LENGTH];
 	  int len = CHAR_STRING (ch, mbstr);
 	  Lisp_Object encoded_ch =
-	    ENCODE_SYSTEM (make_multibyte_string ((char *) mbstr, 1, len));
+	    make_multibyte_string ((char *) mbstr, 1, len);
 
+	  if (encode_p)
+	    encoded_ch = code_convert_string_norecord (encoded_ch,
+						       coding_system, true);
 	  fwrite (SSDATA (encoded_ch), 1, SBYTES (encoded_ch), stream);
 #ifdef WINDOWSNT
 	  if (print_output_debug_flag && stream == stderr)
@@ -1726,6 +1737,11 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 	  print_c_string (XSUBR (obj)->symbol_name, printcharfun);
 	  printchar ('>', printcharfun);
 	}
+      else if (XWIDGETP (obj) || XWIDGET_VIEW_P (obj))
+	{
+	  print_c_string ("#<xwidget ", printcharfun);
+	  printchar ('>', printcharfun);
+	}
       else if (WINDOWP (obj))
 	{
 	  int len = sprintf (buf, "#<window %"pI"d",
@@ -1990,6 +2006,19 @@ print_object (Lisp_Object obj, Lisp_Object printcharfun, bool escapeflag)
 	  printchar ('>', printcharfun);
           break;
 
+#ifdef HAVE_MODULES
+	case Lisp_Misc_User_Ptr:
+	  {
+	    print_c_string ("#<user-ptr ", printcharfun);
+	    int i = sprintf (buf, "ptr=%p finalizer=%p",
+			     XUSER_PTR (obj)->p,
+			     XUSER_PTR (obj)->finalizer);
+	    strout (buf, i, i, printcharfun);
+	    printchar ('>', printcharfun);
+	    break;
+	  }
+#endif
+
         case Lisp_Misc_Finalizer:
           print_c_string ("#<finalizer", printcharfun);
           if (NILP (XFINALIZER (obj)->function))
@@ -2195,7 +2224,7 @@ Also print formfeeds as `\\f'.  */);
 
   DEFVAR_BOOL ("print-escape-nonascii", print_escape_nonascii,
 	       doc: /* Non-nil means print unibyte non-ASCII chars in strings as \\OOO.
-(OOO is the octal representation of the character code.)
+\(OOO is the octal representation of the character code.)
 Only single-byte characters are affected, and only in `prin1'.
 When the output goes in a multibyte buffer, this feature is
 enabled regardless of the value of the variable.  */);
@@ -2203,7 +2232,7 @@ enabled regardless of the value of the variable.  */);
 
   DEFVAR_BOOL ("print-escape-multibyte", print_escape_multibyte,
 	       doc: /* Non-nil means print multibyte characters in strings as \\xXXXX.
-(XXXX is the hex representation of the character code.)
+\(XXXX is the hex representation of the character code.)
 This affects only `prin1'.  */);
   print_escape_multibyte = 0;
 

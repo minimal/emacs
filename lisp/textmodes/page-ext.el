@@ -1,6 +1,6 @@
 ;;; page-ext.el --- extended page handling commands
 
-;; Copyright (C) 1990-1991, 1993-1994, 2001-2015 Free Software
+;; Copyright (C) 1990-1991, 1993-1994, 2001-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Robert J. Chassell <bob@gnu.org>
@@ -351,7 +351,7 @@ Else insert at exact location of point.
 Narrow to new page if `pages-directory-for-adding-page-narrowing-p' is
 non-nil.
 
-Page begins with a '^L' as the default `page-delimiter'.
+Page begins with a `^L' as the default `page-delimiter'.
 Use \\[set-page-delimiter] to change the page-delimiter.
 Point is left in the body of page."
   (interactive "sHeader line: ")

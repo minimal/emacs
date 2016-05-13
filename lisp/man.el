@@ -1,6 +1,6 @@
 ;;; man.el --- browse UNIX manual pages
 
-;; Copyright (C) 1993-1994, 1996-1997, 2001-2015 Free Software
+;; Copyright (C) 1993-1994, 1996-1997, 2001-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Barry A. Warsaw <bwarsaw@cen.com>
@@ -75,7 +75,7 @@
 ;; ============= TODO ===========
 ;; - Add a command for printing.
 ;; - The awk script deletes multiple blank lines.  This behavior does
-;;   not allow to understand if there was indeed a blank line at the
+;;   not allow one to understand if there was indeed a blank line at the
 ;;   end or beginning of a page (after the header, or before the
 ;;   footer).  A different algorithm should be used.  It is easy to
 ;;   compute how many blank lines there are before and after the page
@@ -184,7 +184,9 @@ The value also can be a positive integer for a fixed width."
 
 (defcustom Man-frame-parameters nil
   "Frame parameter list for creating a new frame for a manual page."
-  :type 'sexp
+  :type '(repeat (cons :format "%v"
+		       (symbol :tag "Parameter")
+		       (sexp :tag "Value")))
   :group 'man)
 
 (defcustom Man-downcase-section-letters-flag t

@@ -1,14 +1,14 @@
 /* Lisp parsing and input streams.
 
-Copyright (C) 1985-1989, 1993-1995, 1997-2015 Free Software Foundation,
+Copyright (C) 1985-1989, 1993-1995, 1997-2016 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -264,7 +264,7 @@ readchar (Lisp_Object readcharfun, bool *multibyte)
       return c;
     }
 
-  if (CONSP (readcharfun))
+  if (CONSP (readcharfun) && STRINGP (XCAR (readcharfun)))
     {
       /* This is the case that read_vector is reading from a unibyte
 	 string that contains a byte sequence previously skipped
@@ -406,7 +406,7 @@ unreadchar (Lisp_Object readcharfun, int c)
       read_from_string_index_byte
 	= string_char_to_byte (readcharfun, read_from_string_index);
     }
-  else if (CONSP (readcharfun))
+  else if (CONSP (readcharfun) && STRINGP (XCAR (readcharfun)))
     {
       unread_char = c;
     }
@@ -975,9 +975,20 @@ This uses the variables `load-suffixes' and `load-file-rep-suffixes'.  */)
   return Fnreverse (lst);
 }
 
+/* Returns true if STRING ends with SUFFIX */
+static bool
+suffix_p (Lisp_Object string, const char *suffix)
+{
+  ptrdiff_t suffix_len = strlen (suffix);
+  ptrdiff_t string_len = SBYTES (string);
+
+  return string_len >= suffix_len && !strcmp (SSDATA (string) + string_len - suffix_len, suffix);
+}
+
 DEFUN ("load", Fload, Sload, 1, 5, 0,
        doc: /* Execute a file of Lisp code named FILE.
-First try FILE with `.elc' appended, then try with `.el',
+First try FILE with `.elc' appended, then try with `.el', then try
+with a system-dependent suffix of dynamic modules (see `load-suffixes'),
 then try FILE unmodified (the exact suffixes in the exact order are
 determined by `load-suffixes').  Environment variable references in
 FILE are replaced with their values by calling `substitute-in-file-name'.
@@ -989,10 +1000,10 @@ Print messages at start and end of loading unless
 optional third arg NOMESSAGE is non-nil (but `force-load-messages'
 overrides that).
 If optional fourth arg NOSUFFIX is non-nil, don't try adding
-suffixes `.elc' or `.el' to the specified name FILE.
+suffixes to the specified name FILE.
 If optional fifth arg MUST-SUFFIX is non-nil, insist on
-the suffix `.elc' or `.el'; don't accept just FILE unless
-it ends in one of those suffixes or includes a directory name.
+the suffix `.elc' or `.el' or the module suffix; don't accept just
+FILE unless it ends in one of those suffixes or includes a directory name.
 
 If NOSUFFIX is nil, then if a file could not be found, try looking for
 a different representation of the file by adding non-empty suffixes to
@@ -1074,12 +1085,12 @@ Return t if the file exists and loads successfully.  */)
       if (! NILP (must_suffix))
 	{
 	  /* Don't insist on adding a suffix if FILE already ends with one.  */
-	  ptrdiff_t size = SBYTES (file);
-	  if (size > 3
-	      && !strcmp (SSDATA (file) + size - 3, ".el"))
-	    must_suffix = Qnil;
-	  else if (size > 4
-		   && !strcmp (SSDATA (file) + size - 4, ".elc"))
+	  if (suffix_p (file, ".el")
+	      || suffix_p (file, ".elc")
+#ifdef HAVE_MODULES
+	      || suffix_p (file, MODULES_SUFFIX)
+#endif
+	      )
 	    must_suffix = Qnil;
 	  /* Don't insist on adding a suffix
 	     if the argument includes a directory name.  */
@@ -1151,6 +1162,11 @@ Return t if the file exists and loads successfully.  */)
       record_unwind_protect_int (close_file_unwind, fd);
     }
 
+#ifdef HAVE_MODULES
+  if (suffix_p (found, MODULES_SUFFIX))
+    return unbind_to (count, Fmodule_load (found));
+#endif
+
   /* Check if we're stuck in a recursive load cycle.
 
      2000-09-21: It's not possible to just check for the file loaded
@@ -1189,8 +1205,7 @@ Return t if the file exists and loads successfully.  */)
   specbind (Qold_style_backquotes, Qnil);
   record_unwind_protect (load_warn_old_style_backquotes, file);
 
-  if (!memcmp (SDATA (found) + SBYTES (found) - 4, ".elc", 4)
-      || (fd >= 0 && (version = safe_to_load_version (fd)) > 0))
+  if (suffix_p (found, ".elc") || (fd >= 0 && (version = safe_to_load_version (fd)) > 0))
     /* Load .elc files directly, but not when they are
        remote and have no handler!  */
     {
@@ -1926,17 +1941,22 @@ readevalloop (Lisp_Object readcharfun,
 }
 
 DEFUN ("eval-buffer", Feval_buffer, Seval_buffer, 0, 5, "",
-       doc: /* Execute the current buffer as Lisp code.
+       doc: /* Execute the accessible portion of current buffer as Lisp code.
+You can use \\[narrow-to-region] to limit the part of buffer to be evaluated.
 When called from a Lisp program (i.e., not interactively), this
 function accepts up to five optional arguments:
-BUFFER is the buffer to evaluate (nil means use current buffer).
-PRINTFLAG controls printing of output:
- A value of nil means discard it; anything else is stream for print.
+BUFFER is the buffer to evaluate (nil means use current buffer),
+ or a name of a buffer (a string).
+PRINTFLAG controls printing of output by any output functions in the
+ evaluated code, such as `print', `princ', and `prin1':
+  a value of nil means discard it; anything else is the stream to print to.
+  See Info node `(elisp)Output Streams' for details on streams.
 FILENAME specifies the file name to use for `load-history'.
 UNIBYTE, if non-nil, specifies `load-convert-to-unibyte' for this
  invocation.
-DO-ALLOW-PRINT, if non-nil, specifies that `print' and related
- functions should work normally even if PRINTFLAG is nil.
+DO-ALLOW-PRINT, if non-nil, specifies that output functions in the
+ evaluated code should work normally even if PRINTFLAG is nil, in
+ which case the output is displayed in the echo area.
 
 This function preserves the position of point.  */)
   (Lisp_Object buffer, Lisp_Object printflag, Lisp_Object filename, Lisp_Object unibyte, Lisp_Object do_allow_print)
@@ -1977,7 +1997,8 @@ When called from programs, expects two arguments,
 giving starting and ending indices in the current buffer
 of the text to be executed.
 Programs can pass third argument PRINTFLAG which controls output:
-A value of nil means discard it; anything else is stream for printing it.
+ a value of nil means discard it; anything else is stream for printing it.
+ See Info node `(elisp)Output Streams' for details on streams.
 Also the fourth argument READ-FUNCTION, if non-nil, is used
 instead of `read' to read each expression.  It gets one argument
 which is the input stream for reading characters.
@@ -2038,7 +2059,7 @@ Returns a cons: (OBJECT-READ . FINAL-STRING-INDEX).
 FINAL-STRING-INDEX is an integer giving the position of the next
 remaining character in STRING.  START and END optionally delimit
 a substring of STRING from which to read;  they default to 0 and
-(length STRING) respectively.  Negative values are counted from
+\(length STRING) respectively.  Negative values are counted from
 the end of STRING.  */)
   (Lisp_Object string, Lisp_Object start, Lisp_Object end)
 {
@@ -2119,6 +2140,15 @@ read0 (Lisp_Object readcharfun)
 
 static ptrdiff_t read_buffer_size;
 static char *read_buffer;
+
+/* Grow the read buffer by at least MAX_MULTIBYTE_LENGTH bytes.  */
+
+static void
+grow_read_buffer (void)
+{
+  read_buffer = xpalloc (read_buffer, &read_buffer_size,
+			 MAX_MULTIBYTE_LENGTH, -1, 1);
+}
 
 /* Read a \-escape sequence, assuming we already read the `\'.
    If the escape sequence forces unibyte, return eight-bit char.  */
@@ -2985,10 +3015,7 @@ read1 (Lisp_Object readcharfun, int *pch, bool first_in_list)
 	    if (end - p < MAX_MULTIBYTE_LENGTH)
 	      {
 		ptrdiff_t offset = p - read_buffer;
-		if (min (PTRDIFF_MAX, SIZE_MAX) / 2 < read_buffer_size)
-		  memory_full (SIZE_MAX);
-		read_buffer = xrealloc (read_buffer, read_buffer_size * 2);
-		read_buffer_size *= 2;
+		grow_read_buffer ();
 		p = read_buffer + offset;
 		end = read_buffer + read_buffer_size;
 	      }
@@ -3119,10 +3146,7 @@ read1 (Lisp_Object readcharfun, int *pch, bool first_in_list)
 	      if (end - p < MAX_MULTIBYTE_LENGTH)
 		{
 		  ptrdiff_t offset = p - read_buffer;
-		  if (min (PTRDIFF_MAX, SIZE_MAX) / 2 < read_buffer_size)
-		    memory_full (SIZE_MAX);
-		  read_buffer = xrealloc (read_buffer, read_buffer_size * 2);
-		  read_buffer_size *= 2;
+		  grow_read_buffer ();
 		  p = read_buffer + offset;
 		  end = read_buffer + read_buffer_size;
 		}
@@ -3149,10 +3173,7 @@ read1 (Lisp_Object readcharfun, int *pch, bool first_in_list)
 	  if (p == end)
 	    {
 	      ptrdiff_t offset = p - read_buffer;
-	      if (min (PTRDIFF_MAX, SIZE_MAX) / 2 < read_buffer_size)
-		memory_full (SIZE_MAX);
-	      read_buffer = xrealloc (read_buffer, read_buffer_size * 2);
-	      read_buffer_size *= 2;
+	      grow_read_buffer ();
 	      p = read_buffer + offset;
 	      end = read_buffer + read_buffer_size;
 	    }
@@ -3699,7 +3720,11 @@ static size_t oblookup_last_bucket_number;
 Lisp_Object
 check_obarray (Lisp_Object obarray)
 {
-  if (!VECTORP (obarray) || ASIZE (obarray) == 0)
+  /* We don't want to signal a wrong-type-argument error when we are
+     shutting down due to a fatal error, and we don't want to hit
+     assertions in VECTORP and ASIZE if the fatal error was during GC.  */
+  if (!fatal_error_in_progress
+      && (!VECTORP (obarray) || ASIZE (obarray) == 0))
     {
       /* If Vobarray is now invalid, force it to be valid.  */
       if (EQ (Vobarray, obarray)) Vobarray = initial_obarray;
@@ -3926,10 +3951,8 @@ oblookup (Lisp_Object obarray, register const char *ptr, ptrdiff_t size, ptrdiff
   Lisp_Object bucket, tem;
 
   obarray = check_obarray (obarray);
-  obsize = ASIZE (obarray);
-
   /* This is sometimes needed in the middle of GC.  */
-  obsize &= ~ARRAY_MARK_FLAG;
+  obsize = gc_asize (obarray);
   hash = hash_string (ptr, size_byte) % obsize;
   bucket = AREF (obarray, hash);
   oblookup_last_bucket_number = hash;
@@ -4334,7 +4357,7 @@ init_lread (void)
           load_path_check (default_lpath);
 
           /* Add the site-lisp directories to the front of the default.  */
-          if (!no_site_lisp)
+          if (!no_site_lisp && PATH_SITELOADSEARCH[0] != '\0')
             {
               Lisp_Object sitelisp;
               sitelisp = decode_env_path (0, PATH_SITELOADSEARCH, 0);
@@ -4365,7 +4388,7 @@ init_lread (void)
       load_path_check (Vload_path);
 
       /* Add the site-lisp directories at the front.  */
-      if (initialized && !no_site_lisp)
+      if (initialized && !no_site_lisp && PATH_SITELOADSEARCH[0] != '\0')
         {
           Lisp_Object sitelisp;
           sitelisp = decode_env_path (0, PATH_SITELOADSEARCH, 0);
@@ -4436,7 +4459,7 @@ to find all the symbols in an obarray, use `mapatoms'.  */);
 
   DEFVAR_LISP ("values", Vvalues,
 	       doc: /* List of values of all expressions which were read, evaluated and printed.
-		       Order is reverse chronological.  */);
+Order is reverse chronological.  */);
   XSYMBOL (intern ("values"))->declared_special = 0;
 
   DEFVAR_LISP ("standard-input", Vstandard_input,
@@ -4487,12 +4510,26 @@ programs that process this list should tolerate directories both with
 and without trailing slashes.  */);
 
   DEFVAR_LISP ("load-suffixes", Vload_suffixes,
-	       doc: /* List of suffixes for (compiled or source) Emacs Lisp files.
+	       doc: /* List of suffixes for Emacs Lisp files and dynamic modules.
+This list includes suffixes for both compiled and source Emacs Lisp files.
 This list should not include the empty string.
 `load' and related functions try to append these suffixes, in order,
-to the specified file name if a Lisp suffix is allowed or required.  */);
+to the specified file name if a suffix is allowed or required.  */);
+#ifdef HAVE_MODULES
+  Vload_suffixes = list3 (build_pure_c_string (".elc"),
+			  build_pure_c_string (".el"),
+			  build_pure_c_string (MODULES_SUFFIX));
+#else
   Vload_suffixes = list2 (build_pure_c_string (".elc"),
 			  build_pure_c_string (".el"));
+#endif
+  DEFVAR_LISP ("module-file-suffix", Vmodule_file_suffix,
+	       doc: /* Suffix of loadable module file, or nil of modules are not supported.  */);
+#ifdef HAVE_MODULES
+  Vmodule_file_suffix = build_pure_c_string (MODULES_SUFFIX);
+#else
+  Vmodule_file_suffix = Qnil;
+#endif
   DEFVAR_LISP ("load-file-rep-suffixes", Vload_file_rep_suffixes,
 	       doc: /* List of suffixes that indicate representations of \
 the same file.

@@ -1,6 +1,6 @@
 ;;; vc-svn.el --- non-resident support for Subversion version-control  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2003-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2016 Free Software Foundation, Inc.
 
 ;; Author:      FSF (see vc.el for full credits)
 ;; Maintainer:  Stefan Monnier <monnier@gnu.org>
@@ -147,7 +147,8 @@ switches."
 (defun vc-svn-registered (file)
   "Check if FILE is SVN registered."
   (setq file (expand-file-name file))
-  (when (vc-svn-root file)
+  (when (and (vc-svn-root file)
+             (file-accessible-directory-p (file-name-directory file)))
     (with-temp-buffer
       (cd (file-name-directory file))
       (let* (process-file-side-effects
@@ -309,11 +310,14 @@ to the SVN command."
 
 (defalias 'vc-svn-responsible-p 'vc-svn-root)
 
+(declare-function log-edit-extract-headers "log-edit" (headers string))
+
 (defun vc-svn-checkin (files comment &optional _extra-args-ignored)
   "SVN-specific version of `vc-backend-checkin'."
   (let ((status (apply
                  'vc-svn-command nil 1 files "ci"
-                 (nconc (list "-m" comment) (vc-switches 'SVN 'checkin)))))
+                 (nconc (cons "-m" (log-edit-extract-headers nil comment))
+                        (vc-switches 'SVN 'checkin)))))
     (set-buffer "*vc*")
     (goto-char (point-min))
     (unless (equal status 0)
@@ -399,6 +403,8 @@ FILE is a file wildcard, relative to the root directory of DIRECTORY."
   "Revert FILE to the version it was based on."
   (unless contents-done
     (vc-svn-command nil 0 file "revert")))
+
+(autoload 'vc-read-revision "vc")
 
 (defun vc-svn-merge-file (file)
   "Accept a file merge request, prompting for revisions."
@@ -686,7 +692,7 @@ and that it passes `vc-svn-global-switches' to it before FLAGS."
       ;; use conflict markers in which case we don't really know what to do.
       ;; So let's just punt for now.
       nil)
-    (message "There are unresolved conflicts in this file")))
+    (vc-message-unresolved-conflicts buffer-file-name)))
 
 (defun vc-svn-parse-status (&optional filename)
   "Parse output of \"svn status\" command in the current buffer.

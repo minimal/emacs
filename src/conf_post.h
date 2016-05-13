@@ -1,14 +1,14 @@
 /* conf_post.h --- configure.ac includes this via AH_BOTTOM
 
-Copyright (C) 1988, 1993-1994, 1999-2002, 2004-2015 Free Software
+Copyright (C) 1988, 1993-1994, 1999-2002, 2004-2016 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -51,10 +51,21 @@ typedef bool bool_bf;
 #endif
 #endif
 
-/* When not using Clang, assume its attributes and features are absent.  */
+/* Simulate __has_attribute on compilers that lack it.  It is used only
+   on arguments like alloc_size that are handled in this simulation.  */
 #ifndef __has_attribute
-# define __has_attribute(a) false
+# define __has_attribute(a) __has_attribute_##a
+# define __has_attribute_alloc_size (4 < __GNUC__ + (3 <= __GNUC_MINOR__))
+# define __has_attribute_cleanup (3 < __GNUC__ + (4 <= __GNUC_MINOR__))
+# define __has_attribute_externally_visible \
+    (4 < __GNUC__ + (1 <= __GNUC_MINOR__))
+# define __has_attribute_no_address_safety_analysis false
+# define __has_attribute_no_sanitize_address \
+    (4 < __GNUC__ + (8 <= __GNUC_MINOR__))
 #endif
+
+/* Simulate __has_feature on compilers that lack it.  It is used only
+   to define ADDRESS_SANITIZER below.  */
 #ifndef __has_feature
 # define __has_feature(a) false
 #endif
@@ -222,9 +233,7 @@ extern int emacs_setenv_TZ (char const *);
 #define NO_INLINE
 #endif
 
-#if (__clang__								\
-     ? __has_attribute (externally_visible)				\
-     : (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 1)))
+#if __has_attribute (externally_visible)
 #define EXTERNALLY_VISIBLE __attribute__((externally_visible))
 #else
 #define EXTERNALLY_VISIBLE
@@ -245,6 +254,7 @@ extern int emacs_setenv_TZ (char const *);
 #endif
 
 #define ATTRIBUTE_CONST _GL_ATTRIBUTE_CONST
+#define ATTRIBUTE_UNUSED _GL_UNUSED
 
 #if 3 <= __GNUC__
 # define ATTRIBUTE_MALLOC __attribute__ ((__malloc__))
@@ -252,9 +262,7 @@ extern int emacs_setenv_TZ (char const *);
 # define ATTRIBUTE_MALLOC
 #endif
 
-#if (__clang__					\
-     ? __has_attribute (alloc_size)		\
-     : 4 < __GNUC__ + (3 <= __GNUC_MINOR__))
+#if __has_attribute (alloc_size)
 # define ATTRIBUTE_ALLOC_SIZE(args) __attribute__ ((__alloc_size__ args))
 #else
 # define ATTRIBUTE_ALLOC_SIZE(args)
@@ -277,8 +285,7 @@ extern int emacs_setenv_TZ (char const *);
 /* Attribute of functions whose code should not have addresses
    sanitized.  */
 
-#if (__has_attribute (no_sanitize_address) \
-     || 4 < __GNUC__ + (8 <= __GNUC_MINOR__))
+#if __has_attribute (no_sanitize_address)
 # define ATTRIBUTE_NO_SANITIZE_ADDRESS \
     __attribute__ ((no_sanitize_address)) ADDRESS_SANITIZER_WORKAROUND
 #elif __has_attribute (no_address_safety_analysis)

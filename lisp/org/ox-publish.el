@@ -1,5 +1,5 @@
 ;;; ox-publish.el --- Publish Related Org Mode Files as a Website
-;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2016 Free Software Foundation, Inc.
 
 ;; Author: David O'Toole <dto@gnu.org>
 ;; Maintainer: Carsten Dominik <carsten DOT dominik AT gmail DOT com>
@@ -1078,7 +1078,7 @@ publishing directory."
   "Return numbering for headline matching FUZZY search in FILE.
 
 Return value is a list of numbers, or nil.  This function allows
-to resolve external fuzzy links like:
+the resolution of external fuzzy links like:
 
   [[file.org::*fuzzy][description]]"
   (when org-publish-cache

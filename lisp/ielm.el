@@ -1,7 +1,6 @@
-;;; -*- lexical-binding: t -*-
-;;; ielm.el --- interaction mode for Emacs Lisp
+;;; ielm.el --- interaction mode for Emacs Lisp  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1994, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994, 2001-2016 Free Software Foundation, Inc.
 
 ;; Author: David Smith <maa036@lancaster.ac.uk>
 ;; Maintainer: emacs-devel@gnu.org

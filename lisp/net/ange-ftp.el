@@ -1,6 +1,6 @@
 ;;; ange-ftp.el --- transparent FTP support for GNU Emacs
 
-;; Copyright (C) 1989-1996, 1998, 2000-2015 Free Software Foundation,
+;; Copyright (C) 1989-1996, 1998, 2000-2016 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Andy Norman (ange@hplb.hpl.hp.com)
@@ -3863,7 +3863,7 @@ If VERBOSE-P is non-nil, print progress report in the echo area.
 FILES is a list of files to copy in the form
   (from-file to-file ok-if-already-exists keep-date)
 E.g.,
-  (ange-ftp-copy-files-async t nil t '((\"a\" \"b\" t t) (\"c\" \"d\" t t)))"
+  (ange-ftp-copy-files-async t nil t \\='((\"a\" \"b\" t t) (\"c\" \"d\" t t)))"
   (unless okay-p (error "%s: %s" 'ange-ftp-copy-files-async line))
   (if files
       (let* ((ff (car files))

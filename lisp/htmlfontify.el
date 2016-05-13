@@ -1,6 +1,6 @@
 ;;; htmlfontify.el --- htmlize a buffer/source tree with optional hyperlinks
 
-;; Copyright (C) 2002-2003, 2009-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2003, 2009-2016 Free Software Foundation, Inc.
 
 ;; Emacs Lisp Archive Entry
 ;; Package: htmlfontify
@@ -260,10 +260,10 @@ These functions will be called with the HTML buffer as the current buffer."
   :type    '(hook))
 
 (defcustom hfy-default-face-def nil
-  "Fallback `defface' specification for the face 'default, used when
+  "Fallback `defface' specification for the face `default', used when
 `hfy-display-class' has been set (the normal htmlfontify way of extracting
 potentially non-current face information doesn't necessarily work for
-'default).\n
+`default').\n
 Example: I customize this to:\n
 \((t :background \"black\" :foreground \"white\" :family \"misc-fixed\"))"
   :group   'htmlfontify
@@ -408,23 +408,23 @@ calculating a face's attributes.  This is useful when, for example, you
 are running Emacs on a tty or in batch mode, and want htmlfontify to have
 access to the face spec you would use if you were connected to an X display.\n
 Some valid class specification elements are:\n
-  '(class      color)
-  '(class      grayscale)
-  '(background dark)
-  '(background light)
-  '(type       x-toolkit)
-  '(type       tty)
-  '(type       motif)
-  '(type       lucid)
+  (class      color)
+  (class      grayscale)
+  (background dark)
+  (background light)
+  (type       x-toolkit)
+  (type       tty)
+  (type       motif)
+  (type       lucid)
 Multiple values for a tag may be combined, to indicate that any one or more
 of these values in the specification key constitutes a match, eg:\n
-'((class color grayscale) (type tty)) would match any of:\n
-  '((class color))
-  '((class grayscale))
-  '((class color grayscale))
-  '((class color foo))
-  '((type  tty))
-  '((type  tty) (class color))\n
+((class color grayscale) (type tty)) would match any of:\n
+  ((class color))
+  ((class grayscale))
+  ((class color grayscale))
+  ((class color foo))
+  ((type  tty))
+  ((type  tty) (class color))\n
 and so on."
   :type    '(alist :key-type (symbol) :value-type (symbol))
   :group   'htmlfontify
@@ -879,10 +879,10 @@ specify - this matches Emacs's behavior when deciding on which face attributes
 to use, to the best of my understanding).\n
 If CLASS is nil, then you just get whatever `face-attr-construct' returns,
 ie the current specification in effect for FACE.\n
-*NOTE*: This function forces any face that is not 'default and which has
-no :inherit property to inherit from 'default (this is because 'default
+*NOTE*: This function forces any face that is not `default' and which has
+no :inherit property to inherit from `default' (this is because `default'
 is magical in that Emacs's fonts behave as if they inherit implicitly from
-'default, but no such behavior exists in HTML/CSS).\n
+`default', but no such behavior exists in HTML/CSS).\n
 See also `hfy-display-class' for details of valid values for CLASS."
   (let ((face-spec
          (if class
@@ -999,7 +999,7 @@ merged by the user - `hfy-flatten-style' should do this."
                   (append
                    parent
                    (hfy-face-to-style-i
-                    (hfy-face-attr-for-class v hfy-display-class)) ))))
+                    (hfy-face-attr-for-class v hfy-display-class))))))
         (setq this
               (if val (case key
                        (:family         (hfy-family    val))
@@ -1018,7 +1018,7 @@ merged by the user - `hfy-flatten-style' should do this."
                        (:italic         (hfy-slant 'italic))))))
       (setq that (hfy-face-to-style-i next))
       ;;(lwarn t :warning "%S => %S" fn (nconc this that parent))
-      (nconc this that parent))) )
+      (nconc this parent that))) )
 
 (defun hfy-size-to-int (spec)
   "Convert SPEC, a CSS font-size specifier, to an Emacs :height attribute value.
@@ -1056,13 +1056,19 @@ haven't encountered them yet.  Returns a `hfy-style-assoc'."
     (nconc r (hfy-size (if x (round n) (* n 1.0)))) ))
 
 (defun hfy-face-resolve-face (fn)
+  "For FN return a face specification.
+FN may be either a face or a face specification. If the latter,
+then the specification is returned unchanged."
   (cond
    ((facep fn)
     (hfy-face-attr-for-class fn hfy-display-class))
+   ;; FIXME: is this necessary? Faces can be symbols, but
+   ;; not symbols refering to other symbols?
    ((and (symbolp fn)
          (facep (symbol-value fn)))
-    (hfy-face-attr-for-class (symbol-value fn) hfy-display-class))
-   (t nil)))
+    (hfy-face-attr-for-class
+     (symbol-value fn) hfy-display-class))
+   (t fn)))
 
 
 (defun hfy-face-to-style (fn)
@@ -2412,7 +2418,7 @@ You may also want to set `hfy-page-header' and `hfy-page-footer'."
     (load file 'NOERROR nil nil) ))
 
 
-;;;### (autoloads nil "hfy-cmap" "hfy-cmap.el" "1fb78b15b18622256262c7246b2a3520")
+;;;### (autoloads nil "hfy-cmap" "hfy-cmap.el" "e644ddae915ddb98c9b2f16ffa5a74b2")
 ;;; Generated autoloads from hfy-cmap.el
 
 (autoload 'htmlfontify-load-rgb-file "hfy-cmap" "\

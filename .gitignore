@@ -1,6 +1,6 @@
 # Files that Git should ignore in the Emacs source directory.
 
-# Copyright 2009-2015 Free Software Foundation, Inc.
+# Copyright 2009-2016 Free Software Foundation, Inc.
 
 # This file is part of GNU Emacs.
 
@@ -42,6 +42,7 @@ InfoPlist.strings
 Makefile
 makefile
 !etc/refcards/Makefile
+!modules/mod-test/Makefile
 !test/automated/data/flymake/Makefile
 !test/indent/Makefile
 !test/etags/Makefile
@@ -139,6 +140,8 @@ src/stamp-h1
 *.elc
 *.o
 *.res
+*.so
+*.dll
 [0-9]*.core
 core
 core.*[0-9]
@@ -207,6 +210,7 @@ lisp/international/uni-*.el
 *.cms
 *.cp
 *.cps
+*.doc
 *.dvi
 *.fn
 *.fns
@@ -255,6 +259,7 @@ gnustmp*
 ChangeLog
 [0-9]*.patch
 [0-9]*.txt
+.dir-locals?.el
 /vc-dwim-log-*
 
 # Built by 'make install'.

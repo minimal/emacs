@@ -1,6 +1,6 @@
 ;;; semantic/senator.el --- SEmantic NAvigaTOR
 
-;; Copyright (C) 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2016 Free Software Foundation, Inc.
 
 ;; Author: David Ponce <david@dponce.com>
 ;; Maintainer: emacs-devel@gnu.org
@@ -803,7 +803,7 @@ if available."
   (setq isearch-adjusted t)
   (isearch-update))
 
-;; Recent versions of GNU Emacs allow to override the isearch search
+;; Recent versions of GNU Emacs allow overriding the isearch search
 ;; function for special needs, and avoid to advice the built-in search
 ;; function :-)
 (defun senator-isearch-search-fun ()

@@ -1,6 +1,6 @@
 ;;; cc-mode.el --- major mode for editing C and similar languages
 
-;; Copyright (C) 1985, 1987, 1992-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2016 Free Software Foundation, Inc.
 
 ;; Authors:    2003- Alan Mackenzie
 ;;             1998- Martin Stjernholm
@@ -99,10 +99,9 @@
 (cc-bytecomp-defvar adaptive-fill-first-line-regexp) ; Emacs
 (cc-bytecomp-defun run-mode-hooks)	; Emacs 21.1
 
-;; We set these variables during mode init, yet we don't require
+;; We set this variable during mode init, yet we don't require
 ;; font-lock.
 (cc-bytecomp-defvar font-lock-defaults)
-(cc-bytecomp-defvar font-lock-syntactic-keywords)
 
 ;; Menu support for both XEmacs and Emacs.  If you don't have easymenu
 ;; with your version of Emacs, you are incompatible!
@@ -479,7 +478,7 @@ preferably use the `c-mode-menu' language constant directly."
 and the line breaking/filling code.  Intended to be used by other
 packages that embed CC Mode.
 
-MODE is the CC Mode flavor to set up, e.g. 'c-mode or 'java-mode.
+MODE is the CC Mode flavor to set up, e.g. `c-mode' or `java-mode'.
 DEFAULT-STYLE tells which indentation style to install.  It has the
 same format as `c-default-style'.
 
@@ -632,8 +631,11 @@ that requires a literal mode spec at compile time."
     (font-lock-mode 1)))
 
 ;; Buffer local variables defining the region to be fontified by a font lock
-;; after-change function.  They are set in c-after-change to
-;; after-change-functions' BEG and END, and may be modified by functions in
+;; after-change function.  They are initialized in c-before-change to
+;; before-change-functions' BEG and END.  `c-new-END' is amended in
+;; c-after-change with after-change-functions' BEG, END, and OLD-LEN.  These
+;; variables may be modified by any before/after-change function, in
+;; particular by functions in `c-get-state-before-change-functions' and
 ;; `c-before-font-lock-functions'.
 (defvar c-new-BEG 0)
 (make-variable-buffer-local 'c-new-BEG)
@@ -647,7 +649,7 @@ In addition to the work done by `c-basic-common-init' and
 customary in CC Mode modes but which aren't strictly necessary for CC
 Mode to operate correctly.
 
-MODE is the symbol for the mode to initialize, like 'c-mode.  See
+MODE is the symbol for the mode to initialize, like `c-mode'.  See
 `c-basic-common-init' for details.  It's only optional to be
 compatible with old code; callers should always specify it."
 
@@ -672,8 +674,9 @@ compatible with old code; callers should always specify it."
 		(funcall fn (point-min) (point-max)))
 	      c-get-state-before-change-functions)
 	(mapc (lambda (fn)
-		(funcall fn (point-min) (point-max)
-			 (- (point-max) (point-min))))
+		(if (not (eq fn 'c-restore-<>-properties))
+		    (funcall fn (point-min) (point-max)
+			     (- (point-max) (point-min)))))
 	      c-before-font-lock-functions))))
 
   (set (make-local-variable 'outline-regexp) "[^#\n\^M]")
@@ -1033,6 +1036,8 @@ Note that the style variables are always made local to the buffer."
 	      c-just-done-before-change) ; guard against a spurious second
 					; invocation of before-change-functions.
     (setq c-just-done-before-change t)
+    ;; (c-new-BEG c-new-END) will be the region to fontify.
+    (setq c-new-BEG beg  c-new-END end)
     (setq c-maybe-stale-found-type nil)
     (save-restriction
       (save-match-data
@@ -1098,10 +1103,9 @@ Note that the style variables are always made local to the buffer."
 			      (buffer-substring-no-properties beg end)))))))
 
 	  (if c-get-state-before-change-functions
-	      (let (open-paren-in-column-0-is-defun-start)
-		(mapc (lambda (fn)
-			(funcall fn beg end))
-		      c-get-state-before-change-functions)))
+	      (mapc (lambda (fn)
+		      (funcall fn beg end))
+		    c-get-state-before-change-functions))
 	  )))
     ;; The following must be done here rather than in `c-after-change' because
     ;; newly inserted parens would foul up the invalidation algorithm.
@@ -1128,11 +1132,12 @@ Note that the style variables are always made local to the buffer."
 
   ;; (c-new-BEG c-new-END) will be the region to fontify.  It may become
   ;; larger than (beg end).
-  (setq c-new-BEG beg  c-new-END end)
+  ;; (setq c-new-BEG beg  c-new-END end)
+  (setq c-new-END (- (+ c-new-END (- end beg)) old-len))
 
   (unless (c-called-from-text-property-change-p)
     (setq c-just-done-before-change nil)
-    (c-save-buffer-state (case-fold-search open-paren-in-column-0-is-defun-start)
+    (c-save-buffer-state (case-fold-search)
       ;; When `combine-after-change-calls' is used we might get calls
       ;; with regions outside the current narrowing.  This has been
       ;; observed in Emacs 20.7.
@@ -1247,7 +1252,8 @@ Note that the style variables are always made local to the buffer."
   (save-restriction
     (widen)
     (save-excursion
-      (let ((new-beg beg) (new-end end) new-region)
+      (let ((new-beg beg) (new-end end)
+	    (new-region (cons beg end)))
 	(mapc (lambda (fn)
 		(setq new-region (funcall fn new-beg new-end))
 		(setq new-beg (car new-region) new-end (cdr new-region)))
@@ -1268,8 +1274,7 @@ Note that the style variables are always made local to the buffer."
   ;;
   ;; Type a space in the first blank line, and the fontification of the next
   ;; line was fouled up by context fontification.
-  (let (new-beg new-end new-region case-fold-search
-		open-paren-in-column-0-is-defun-start)
+  (let (new-beg new-end new-region case-fold-search)
     (if (and c-in-after-change-fontification
 	     (< beg c-new-END) (> end c-new-BEG))
 	;; Region and the latest after-change fontification region overlap.
@@ -1331,12 +1336,13 @@ This function is called from `c-common-init', once per mode initialization."
 	   . c-mark-function)))
 
   ;; Prevent `font-lock-default-fontify-region' extending the region it will
-  ;; fontify to whole lines by removing `font-lock-extend-region-whole-lines'
-  ;; (and, coincidentally, `font-lock-extend-region-multiline' (which we do
-  ;; not need)) from `font-lock-extend-region-functions'.  (Emacs only).  This
-  ;; fixes Emacs bug #19669.
+  ;; fontify to whole lines by removing `font-lock-extend-region-wholelines'
+  ;; from `font-lock-extend-region-functions'.  (Emacs only).  This fixes
+  ;; Emacs bug #19669.
   (when (boundp 'font-lock-extend-region-functions)
-    (setq font-lock-extend-region-functions nil))
+    (setq font-lock-extend-region-functions
+	  (delq 'font-lock-extend-region-wholelines
+		font-lock-extend-region-functions)))
 
   (make-local-variable 'font-lock-fontify-region-function)
   (setq font-lock-fontify-region-function 'c-font-lock-fontify-region)

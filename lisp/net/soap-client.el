@@ -1,14 +1,15 @@
-;;;; soap-client.el -- Access SOAP web services       -*- lexical-binding: t -*-
+;;; soap-client.el --- Access SOAP web services       -*- lexical-binding: t -*-
 
-;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2016 Free Software Foundation, Inc.
 
 ;; Author: Alexandru Harsanyi <AlexHarsanyi@gmail.com>
 ;; Author: Thomas Fitzsimmons <fitzsim@fitzsim.org>
 ;; Created: December, 2009
-;; Version: 3.0.1
+;; Version: 3.0.2
 ;; Keywords: soap, web-services, comm, hypermedia
 ;; Package: soap-client
 ;; Homepage: https://github.com/alex-hhh/emacs-soap-client
+;; Package-Requires: ((cl-lib "0.5"))
 
 ;; This file is part of GNU Emacs.
 
@@ -43,6 +44,7 @@
 ;;; Code:
 
 (eval-when-compile (require 'cl))
+(require 'cl-lib)
 
 (require 'xml)
 (require 'xsd-regexp)
@@ -56,9 +58,9 @@
 (require 'mm-decode)
 
 (defsubst soap-warning (message &rest args)
-  "Display a warning MESSAGE with ARGS, using the 'soap-client warning type."
-  (display-warning 'soap-client (apply #'format-message message args)
-                   :warning))
+  "Display a warning MESSAGE with ARGS, using the `soap-client' warning type."
+  ;; Do not use #'format-message, to support older Emacs versions.
+  (display-warning 'soap-client (apply #'format message args) :warning))
 
 (defgroup soap-client nil
   "Access SOAP web services from Emacs."
@@ -390,7 +392,7 @@ binding) but the same name."
 
 ;; SOAP WSDL documents use XML Schema to define the types that are part of the
 ;; message exchange.  We include here an XML schema model with a parser and
-;; serializer/deserialiser.
+;; serializer/deserializer.
 
 (defstruct (soap-xs-type (:include soap-element))
   id
@@ -560,7 +562,7 @@ fractional seconds, and the DST (daylight savings time) field is
 replaced with DATATYPE, a symbol representing the XSD primitive
 datatype.  This symbol can be used to determine which fields
 apply and which don't when it's not already clear from context.
-For example a datatype of 'time means the year, month and day
+For example a datatype of `time' means the year, month and day
 fields should be ignored.
 
 This function will throw an error if DATE-TIME-STRING represents
@@ -710,7 +712,7 @@ This is a specialization of `soap-decode-type' for
 (defun soap-xs-element-type (element)
   "Retrieve the type of ELEMENT.
 This is normally stored in the TYPE^ slot, but if this element
-contains a reference, we retrive the type of the reference."
+contains a reference, retrieve the type of the reference."
   (if (soap-xs-element-reference element)
       (soap-xs-element-type (soap-xs-element-reference element))
     (soap-xs-element-type^ element)))
@@ -1246,9 +1248,9 @@ See also `soap-wsdl-resolve-references'."
               (error (push (cadr error-object) messages))))
           (when messages
             (error (mapconcat 'identity (nreverse messages) "; and: "))))
-      (cl-flet ((fail-with-message (format value)
-                                   (push (format format value) messages)
-                                   (throw 'invalid nil)))
+      (cl-labels ((fail-with-message (format value)
+				     (push (format format value) messages)
+				     (throw 'invalid nil)))
         (catch 'invalid
           (let ((enumeration (soap-xs-simple-type-enumeration type)))
             (when (and (> (length enumeration) 1)
@@ -1989,7 +1991,7 @@ This is a specialization of `soap-decode-type' for
   )
 
 (defun soap-make-wsdl (origin)
-  "Create a new WSDL document, loaded from ORIGIN, and intialize it."
+  "Create a new WSDL document, loaded from ORIGIN, and initialize it."
   (let ((wsdl (soap-make-wsdl^ :origin origin)))
 
     ;; Add the XSD types to the wsdl document
@@ -2753,7 +2755,14 @@ decode function to perform the actual decoding."
 
 ;;;; Soap Envelope parsing
 
-(define-error 'soap-error "SOAP error")
+(if (fboundp 'define-error)
+    (define-error 'soap-error "SOAP error")
+  ;; Support older Emacs versions that do not have define-error, so
+  ;; that soap-client can remain unchanged in GNU ELPA.
+  (put 'soap-error
+       'error-conditions
+       '(error soap-error))
+  (put 'soap-error 'error-message "SOAP error"))
 
 (defun soap-parse-envelope (node operation wsdl)
   "Parse the SOAP envelope in NODE and return the response.
@@ -3087,7 +3096,11 @@ the SOAP request.
 NOTE: The SOAP service provider should document the available
 operations and their parameters for the service.  You can also
 use the `soap-inspect' function to browse the available
-operations in a WSDL document."
+operations in a WSDL document.
+
+NOTE: `soap-invoke' base64-decodes xsd:base64Binary return values
+into unibyte strings; these byte-strings require further
+interpretation by the caller."
   (apply #'soap-invoke-internal nil nil wsdl service operation-name parameters))
 
 (defun soap-invoke-async (callback cbargs wsdl service operation-name

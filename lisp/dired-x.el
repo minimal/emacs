@@ -1,6 +1,6 @@
 ;;; dired-x.el --- extra Dired functionality  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1993-1994, 1997, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1993-1994, 1997, 2001-2016 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Sebastian Kremer <sk@thp.uni-koeln.de>
@@ -821,11 +821,8 @@ replace it with a dir-locals-file `./%s'"
              dir-locals-file))
   (if (file-exists-p dir-locals-file)
       (message "File `./%s' already exists." dir-locals-file)
-    (with-temp-buffer
-      (insert "\
-\((dired-mode . ((subdirs . nil)
-                (dired-omit-mode . t))))\n")
-      (write-file dir-locals-file))
+    (add-dir-local-variable 'dired-mode 'subdirs nil)
+    (add-dir-local-variable 'dired-mode 'dired-omit-mode t)
     ;; Run extra-hooks and revert directory.
     (when (derived-mode-p 'dired-mode)
       (hack-dir-local-variables-non-file-buffer)

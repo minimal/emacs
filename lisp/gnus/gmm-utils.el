@@ -1,6 +1,6 @@
 ;;; gmm-utils.el --- Utility functions for Gnus, Message and MML
 
-;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2016 Free Software Foundation, Inc.
 
 ;; Author: Reiner Steib <reiner.steib@gmx.de>
 ;; Keywords: news
@@ -473,7 +473,7 @@ specifiers `%Z' and `%z' will be replaced with a numeric form. "
 	  (setq st nd))
 	(push (substring format-string st) rest)
 	(format-time-string (apply 'concat (nreverse rest)) time))
-    (format-time-string format-string time tz)))
+    (format-time-string format-string time t)))
 
 (provide 'gmm-utils)
 

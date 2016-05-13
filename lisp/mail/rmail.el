@@ -1,6 +1,6 @@
 ;;; rmail.el --- main code of "RMAIL" mail reader for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1988, 1993-1998, 2000-2015 Free Software
+;; Copyright (C) 1985-1988, 1993-1998, 2000-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -98,7 +98,7 @@ its character representation and its display representation.")
 
 (defvar rmail-header-style 'normal
   "The current header display style choice, one of
-'normal (selected headers) or 'full (all headers).")
+`normal' (selected headers) or `full' (all headers).")
 
 (defvar rmail-mime-decoded nil
   "Non-nil if message has been processed by `rmail-show-mime-function'.")
@@ -298,7 +298,7 @@ mail URLs as the source mailbox.")
 ;;;###autoload
 (defun rmail-movemail-variant-p (&rest variants)
   "Return t if the current movemail variant is any of VARIANTS.
-Currently known variants are 'emacs and 'mailutils."
+Currently known variants are `emacs' and `mailutils'."
   (when (not rmail-movemail-variant-in-use)
     ;; Autodetect
     (setq rmail-movemail-variant-in-use (rmail-autodetect)))
@@ -692,8 +692,9 @@ Element N specifies the summary line for message N+1.")
 This is set to nil by default.")
 
 (defcustom rmail-get-coding-function nil
-  "Function of no args to try to determine coding system for a message."
-  :type 'function
+  "Function of no args to try to determine coding system for a message.
+If nil, just search for `rmail-mime-charset-pattern'."
+  :type '(choice (const nil) function)
   :group 'rmail
   :version "24.4")
 
@@ -2796,7 +2797,12 @@ The current mail message becomes the message displayed."
 	  ;; rmail-header-style based on the binding in effect when
 	  ;; this function is called; `rmail-toggle-headers' can
 	  ;; inspect this value to determine how to toggle.
-	  (set (make-local-variable 'rmail-header-style) header-style))
+	  (set (make-local-variable 'rmail-header-style) header-style)
+          ;; In case viewing the previous message sets the paragraph
+          ;; direction non-nil, we reset it here to allow independent
+          ;; dynamic determination of paragraph direction in every
+          ;; message.
+          (setq bidi-paragraph-direction nil))
 	(if (and rmail-enable-mime
 		 rmail-show-mime-function
 		 (re-search-forward "mime-version: 1.0" nil t))
@@ -4080,7 +4086,7 @@ typically for purposes of moderating a list."
 		    (set-syntax-table mail-abbrev-syntax-table)
 		    (goto-char before)
 		    (while (and (< (point) end)
-				(progn (forward-word 1)
+				(progn (forward-word-strictly 1)
 				       (<= (point) end)))
 		      (expand-abbrev))
 		    (set-syntax-table old-syntax-table))
@@ -4576,6 +4582,8 @@ Argument MIME is non-nil if this is a mime message."
     (list armor-start (- (point-max) after-end) mime
           armor-end-regexp)))
 
+(declare-function rmail-mime-entity-truncated "rmailmm" (entity))
+
 ;; Should this have a key-binding, or be in a menu?
 ;; There doesn't really seem to be an appropriate menu.
 ;; Eg the edit command is not in a menu either.
@@ -4725,7 +4733,7 @@ Argument MIME is non-nil if this is a mime message."
 
 ;;; Start of automatically extracted autoloads.
 
-;;;### (autoloads nil "rmailedit" "rmailedit.el" "1ed1c211e6e9c254ba3e0dd8d546e745")
+;;;### (autoloads nil "rmailedit" "rmailedit.el" "03eb8c36b3c57d58eecedb9eeffa623e")
 ;;; Generated autoloads from rmailedit.el
 
 (autoload 'rmail-edit-current-message "rmailedit" "\
@@ -4735,7 +4743,7 @@ Edit the contents of this message.
 
 ;;;***
 
-;;;### (autoloads nil "rmailkwd" "rmailkwd.el" "298dcda7febb6e4ebf0a166101f40650")
+;;;### (autoloads nil "rmailkwd" "rmailkwd.el" "4e1b251929961e2b9d3b126301d697d0")
 ;;; Generated autoloads from rmailkwd.el
 
 (autoload 'rmail-add-label "rmailkwd" "\
@@ -4778,7 +4786,7 @@ With prefix argument N moves forward N messages with these labels.
 
 ;;;***
 
-;;;### (autoloads nil "rmailmm" "rmailmm.el" "36f518e036612a33eb436cb267fd39c7")
+;;;### (autoloads nil "rmailmm" "rmailmm.el" "7ab6ab96dfdeeec6bc8f4620295b7119")
 ;;; Generated autoloads from rmailmm.el
 
 (autoload 'rmail-mime "rmailmm" "\
@@ -4804,7 +4812,7 @@ The arguments ARG and STATE have no effect in this case.
 
 ;;;***
 
-;;;### (autoloads nil "rmailmsc" "rmailmsc.el" "c3f0d33739768fc12acc4258ae0da72e")
+;;;### (autoloads nil "rmailmsc" "rmailmsc.el" "471c370ff9f183806c8d749961ec9d79")
 ;;; Generated autoloads from rmailmsc.el
 
 (autoload 'set-rmail-inbox-list "rmailmsc" "\
@@ -4818,7 +4826,7 @@ This applies only to the current session.
 
 ;;;***
 
-;;;### (autoloads nil "rmailsort" "rmailsort.el" "8f551773021df4fa1a14ec2517e6a4f1")
+;;;### (autoloads nil "rmailsort" "rmailsort.el" "2c8e39f7bae6fcc465a83ebccd46c8a4")
 ;;; Generated autoloads from rmailsort.el
 
 (autoload 'rmail-sort-by-date "rmailsort" "\
@@ -4875,7 +4883,7 @@ If prefix argument REVERSE is non-nil, sorts in reverse order.
 
 ;;;***
 
-;;;### (autoloads nil "rmailsum" "rmailsum.el" "4bc0d1a65aede332348200e1937c84d4")
+;;;### (autoloads nil "rmailsum" "rmailsum.el" "8205e67c8188aa5c01715e79e10667c1")
 ;;; Generated autoloads from rmailsum.el
 
 (autoload 'rmail-summary "rmailsum" "\
@@ -4922,7 +4930,7 @@ SENDERS is a regular expression.
 
 ;;;***
 
-;;;### (autoloads nil "undigest" "undigest.el" "c0ddfad4fe34ef9c1e790c2cc72b571d")
+;;;### (autoloads nil "undigest" "undigest.el" "20561f083496eb113fa9e501902bfcc3")
 ;;; Generated autoloads from undigest.el
 
 (autoload 'undigestify-rmail-message "undigest" "\

@@ -1,13 +1,13 @@
 /* Buffer insertion/deletion and gap motion for GNU Emacs.
-   Copyright (C) 1985-1986, 1993-1995, 1997-2015 Free Software
+   Copyright (C) 1985-1986, 1993-1995, 1997-2016 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -126,7 +126,10 @@ gap_left (ptrdiff_t charpos, ptrdiff_t bytepos, bool newgap)
       if (i == 0)
 	break;
       /* If a quit is requested, stop copying now.
-	 Change BYTEPOS to be where we have actually moved the gap to.  */
+	 Change BYTEPOS to be where we have actually moved the gap to.
+	 Note that this cannot happen when we are called to make the
+	 gap larger or smaller, since make_gap_larger and
+	 make_gap_smaller prevent QUIT by setting inhibit-quit.  */
       if (QUITP)
 	{
 	  bytepos = new_s1;
@@ -179,7 +182,10 @@ gap_right (ptrdiff_t charpos, ptrdiff_t bytepos)
       if (i == 0)
 	break;
       /* If a quit is requested, stop copying now.
-	 Change BYTEPOS to be where we have actually moved the gap to.  */
+	 Change BYTEPOS to be where we have actually moved the gap to.
+	 Note that this cannot happen when we are called to make the
+	 gap larger or smaller, since make_gap_larger and
+	 make_gap_smaller prevent QUIT by setting inhibit-quit.  */
       if (QUITP)
 	{
 	  bytepos = new_s1;
@@ -386,7 +392,9 @@ make_gap_larger (ptrdiff_t nbytes_added)
 
   enlarge_buffer_text (current_buffer, nbytes_added);
 
-  /* Prevent quitting in move_gap.  */
+  /* Prevent quitting in gap_left.  We cannot allow a QUIT there,
+     because that would leave the buffer text in an inconsistent
+     state, with 2 gap holes instead of just one.  */
   tem = Vinhibit_quit;
   Vinhibit_quit = Qt;
 
@@ -432,7 +440,9 @@ make_gap_smaller (ptrdiff_t nbytes_removed)
   if (GAP_SIZE - nbytes_removed < GAP_BYTES_MIN)
     nbytes_removed = GAP_SIZE - GAP_BYTES_MIN;
 
-  /* Prevent quitting in move_gap.  */
+  /* Prevent quitting in gap_right.  We cannot allow a QUIT there,
+     because that would leave the buffer text in an inconsistent
+     state, with 2 gap holes instead of just one.  */
   tem = Vinhibit_quit;
   Vinhibit_quit = Qt;
 
@@ -1765,6 +1775,18 @@ modify_text (ptrdiff_t start, ptrdiff_t end)
   bset_point_before_scroll (current_buffer, Qnil);
 }
 
+/* Signal that we are about to make a change that may result in new
+   undo information.
+ */
+static void
+run_undoable_change (void)
+{
+  if (EQ (BVAR (current_buffer, undo_list), Qt))
+    return;
+
+  call0 (Qundo_auto__undoable_change);
+}
+
 /* Check that it is okay to modify the buffer between START and END,
    which are char positions.
 
@@ -1773,7 +1795,12 @@ modify_text (ptrdiff_t start, ptrdiff_t end)
    any modification properties the text may have.
 
    If PRESERVE_PTR is nonzero, we relocate *PRESERVE_PTR
-   by holding its value temporarily in a marker.  */
+   by holding its value temporarily in a marker.
+
+   This function runs Lisp, which means it can GC, which means it can
+   compact buffers, including the current buffer being worked on here.
+   So don't you dare calling this function while manipulating the gap,
+   or during some other similar "critical section".  */
 
 void
 prepare_to_modify_buffer_1 (ptrdiff_t start, ptrdiff_t end,
@@ -1785,6 +1812,8 @@ prepare_to_modify_buffer_1 (ptrdiff_t start, ptrdiff_t end,
   XSETFASTINT (temp, start);
   if (!NILP (BVAR (current_buffer, read_only)))
     Fbarf_if_buffer_read_only (temp);
+
+  run_undoable_change();
 
   bset_redisplay (current_buffer);
 
@@ -2186,6 +2215,8 @@ syms_of_insdel (void)
   staticpro (&combine_after_change_buffer);
   combine_after_change_list = Qnil;
   combine_after_change_buffer = Qnil;
+
+  DEFSYM (Qundo_auto__undoable_change, "undo-auto--undoable-change");
 
   DEFVAR_LISP ("combine-after-change-calls", Vcombine_after_change_calls,
 	       doc: /* Used internally by the function `combine-after-change-calls' macro.  */);

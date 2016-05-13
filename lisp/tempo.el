@@ -1,6 +1,6 @@
 ;;; tempo.el --- Flexible template insertion
 
-;; Copyright (C) 1994-1995, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1995, 2001-2016 Free Software Foundation, Inc.
 
 ;; Author: David Kågedal <davidk@lysator.liu.se>
 ;; Created: 16 Feb 1994
@@ -147,7 +147,7 @@ disappears at the next keypress; otherwise, it remains forever."
   "List of functions to run when inserting a string.
 Each function is called with a single arg, STRING and should return
 another string.  This could be used for making all strings upcase by
-setting it to '(upcase), for example.")
+setting it to (upcase), for example.")
 
 (defvar tempo-tags nil
   "An association list with tags and corresponding templates.")

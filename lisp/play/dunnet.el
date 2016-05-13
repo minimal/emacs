@@ -1,6 +1,6 @@
 ;;; dunnet.el --- text adventure for Emacs
 
-;; Copyright (C) 1992-1993, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992-1993, 2001-2016 Free Software Foundation, Inc.
 
 ;; Author: Ron Schnell <ronnie@driver-aces.com>
 ;; Created: 25 Jul 1992
@@ -1203,7 +1203,7 @@ for a moment, then straighten yourself up.
   (interactive)
   (forward-line (- 0 (- (window-height) 2 )))
   (set-window-start (selected-window) (point))
-  (end-of-buffer))
+  (goto-char (point-max)))
 
 ;;; Insert something into the buffer, followed by newline.
 
@@ -1321,29 +1321,8 @@ for a moment, then straighten yourself up.
 	  (setq new-inven (append new-inven (list x)))))
     (setq dun-inventory new-inven)))
 
-
-(let ((i 0) (lower "abcdefghijklmnopqrstuvwxyz") upper)
-  (setq dun-translate-table (make-vector 256 0))
-  (while (< i 256)
-    (aset dun-translate-table i i)
-    (setq i (1+ i)))
-  (setq lower (concat lower lower))
-  (setq upper (upcase lower))
-  (setq i 0)
-  (while (< i 26)
-    (aset dun-translate-table (+ ?a i) (aref lower (+ i 13)))
-    (aset dun-translate-table (+ ?A i) (aref upper (+ i 13)))
-      (setq i (1+ i))))
-
 (defun dun-rot13 ()
-  (let (str len (i 0))
-    (setq str (buffer-substring (point-min) (point-max)))
-    (setq len (length str))
-    (while (< i len)
-      (aset str i (aref dun-translate-table (aref str i)))
-      (setq i (1+ i)))
-    (erase-buffer)
-    (insert str)))
+  (rot13-region (point-min) (point-max)))
 
 ;;;;
 ;;;; This section defines the globals that are used in dunnet.

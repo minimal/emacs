@@ -1,6 +1,6 @@
 ;;; abbrev.el --- abbrev mode commands for Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1987, 1992, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1985-1987, 1992, 2001-2016 Free Software Foundation,
 ;; Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -580,6 +580,8 @@ An obsolete but still supported calling form is:
                   ,@(if (cadr props) (list :system (cadr props))))))
   (unless (plist-get props :count)
     (setq props (plist-put props :count 0)))
+  (setq props (plist-put props :abbrev-table-modiff
+                         (abbrev-table-get table :abbrev-table-modiff)))
   (let ((system-flag (plist-get props :system))
         (sym (intern name table)))
     ;; Don't override a prior user-defined abbrev with a system abbrev,

@@ -1,14 +1,14 @@
 /* Output like sprintf to a buffer of specified size.    -*- coding: utf-8 -*-
    Also takes args differently: pass one pointer to the end
    of the format string in addition to the format string itself.
-   Copyright (C) 1985, 2001-2015 Free Software Foundation, Inc.
+   Copyright (C) 1985, 2001-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -500,7 +500,7 @@ esprintf (char *buf, char const *format, ...)
   return nbytes;
 }
 
-#if defined HAVE_X_WINDOWS && defined USE_X_TOOLKIT
+#if HAVE_MODULES || (defined HAVE_X_WINDOWS && defined USE_X_TOOLKIT)
 
 /* Format to buffer *BUF of positive size *BUFSIZE, reallocating *BUF
    and updating *BUFSIZE if the buffer is too small, and otherwise

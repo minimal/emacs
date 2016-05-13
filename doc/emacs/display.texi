@@ -1,6 +1,6 @@
 @c -*- coding: utf-8 -*-
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2015 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2016 Free Software
 @c Foundation, Inc.
 
 @c See file emacs.texi for copying conditions.
@@ -924,7 +924,10 @@ mode for all buffers, use @kbd{M-x global-hi-lock-mode} or place
 
   Hi Lock mode works like Font Lock mode (@pxref{Font Lock}), except
 that you specify explicitly the regular expressions to highlight.  You
-control them with these commands:
+control them with the commands described below.  (The key bindings
+below that begin with @kbd{C-x w} are deprecated in favor of the
+global @kbd{M-s h} bindings, and will be removed in some future Emacs
+version.)
 
 @table @kbd
 @item M-s h r @var{regexp} @key{RET} @var{face} @key{RET}
@@ -1084,6 +1087,23 @@ To disable this, change the variable
 @code{overflow-newline-into-fringe} to @code{nil}; this causes Emacs
 to continue or truncate lines that are exactly as wide as the window.
 
+  If you customize @code{fringe-mode} to remove the fringes on one or
+both sides of the window display, the features that display on the
+fringe are not available.  Indicators of line continuation and
+truncation are an exception: when fringes are not available, Emacs
+uses the leftmost and rightmost character cells to indicate
+continuation and truncation with special ASCII characters, see
+@ref{Continuation Lines}, and @ref{Line Truncation}.  This reduces the
+width available for displaying text on each line, because the
+character cells used for truncation and continuation indicators are
+reserved for that purpose.  Since buffer text can include
+bidirectional text, and thus both left-to-right and right-to-left
+paragraphs (@pxref{Bidirectional Editing}), removing only one of the
+fringes still reserves two character cells, one on each side of the
+window, for truncation and continuation indicators, because these
+indicators are displayed on opposite sides of the window in
+right-to-left paragraphs.
+
 @node Displaying Boundaries
 @section Displaying Boundaries
 
@@ -1164,12 +1184,15 @@ indicate-empty-lines t)}.
 @cindex mode, Whitespace
 @findex whitespace-mode
 @vindex whitespace-style
+@findex whitespace-toggle-options
   Whitespace mode is a buffer-local minor mode that lets you
 visualize many kinds of whitespace in the buffer, by either
 drawing the whitespace characters with a special face or displaying
 them as special glyphs.  To toggle this mode, type @kbd{M-x
 whitespace-mode}.  The kinds of whitespace visualized are determined
-by the list variable @code{whitespace-style}.  Here is a partial list
+by the list variable @code{whitespace-style}.  Individual elements in
+that list can be toggled on or off in the current buffer by typing
+@w{@kbd{M-x whitespace-toggle-options}}.  Here is a partial list
 of possible elements (see the variable's documentation for the full
 list):
 
@@ -1200,6 +1223,13 @@ Highlight newlines.
 @item empty
 Highlight empty lines.
 
+@item big-indent
+@vindex whitespace-big-indent-regexp
+Highlight too-deep indentation.  By default any sequence of at least 4
+consecutive TAB characters or 32 consecutive SPC characters is
+highlighted.  To change that, customize the regular expression
+@code{whitespace-big-indent-regexp}.
+
 @item space-mark
 Draw space and non-breaking characters with a special glyph.
 
@@ -1209,6 +1239,12 @@ Draw tab characters with a special glyph.
 @item newline-mark
 Draw newline characters with a special glyph.
 @end table
+
+@findex global-whitespace-toggle-options
+@findex global-whitespace-mode
+Global Whitespace mode is a global minor mode that lets you visualize
+whitespace in all buffers.  To toggle individual features, use
+@kbd{M-x global-whitespace-toggle-options}.
 
 @node Selective Display
 @section Selective Display
@@ -1457,15 +1493,18 @@ elisp, The Emacs Lisp Reference Manual}.
 
 @cindex glyphless characters
 @cindex characters with no font glyphs
+@cindex glyphless-char face
   On graphical displays, some characters may have no glyphs in any of
 the fonts available to Emacs.  These @dfn{glyphless characters} are
 normally displayed as boxes containing the hexadecimal character code.
 Similarly, on text terminals, characters that cannot be displayed
 using the terminal encoding (@pxref{Terminal Coding}) are normally
 displayed as question signs.  You can control the display method by
-customizing the variable @code{glyphless-char-display-control}.
-@xref{Glyphless Chars,, Glyphless Character Display, elisp, The Emacs
-Lisp Reference Manual}, for details.
+customizing the variable @code{glyphless-char-display-control}.  You
+can also customize the @code{glyphless-char} face to make these
+characters more prominent on display.  @xref{Glyphless Chars,,
+Glyphless Character Display, elisp, The Emacs Lisp Reference Manual},
+for details.
 
 @cindex curly quotes
 @cindex curved quotes
@@ -1579,7 +1618,6 @@ screen lines.  Setting the variable @code{truncate-lines} in any way
 makes it local to the current buffer; until that time, the default
 value, which is normally @code{nil}, is in effect.
 
-@vindex truncate-partial-width-windows
   If a split window becomes too narrow, Emacs may automatically enable
 line truncation.  @xref{Split Window}, for the variable
 @code{truncate-partial-width-windows} which controls this.

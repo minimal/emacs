@@ -1,13 +1,13 @@
 /* Input event support for Emacs on the Microsoft Windows API.
-   Copyright (C) 1992-1993, 1995, 2001-2015 Free Software Foundation,
+   Copyright (C) 1992-1993, 1995, 2001-2016 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -660,6 +660,7 @@ handle_file_notifications (struct input_event *hold_quit)
 	      inev.arg = list3 (make_pointer_integer (notifications_desc),
 				action, fname);
 	      kbd_buffer_store_event_hold (&inev, hold_quit);
+	      nevents++;
 
 	      if (!fni->NextEntryOffset)
 		break;

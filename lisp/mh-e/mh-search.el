@@ -1,6 +1,6 @@
 ;;; mh-search  ---  MH-Search mode
 
-;; Copyright (C) 1993, 1995, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993, 1995, 2001-2016 Free Software Foundation, Inc.
 
 ;; Author: Indexed search by Satyaki Das <satyaki@theforce.stanford.edu>
 ;; Maintainer: Bill Wohler <wohler@newt.com>
@@ -1262,7 +1262,7 @@ is used to search."
     (forward-line)))
 
 ;; All implementations of pick have special options -cc, -date, -from and
-;; -subject that allow to search for corresponding components. Any other
+;; -subject that allow searching for corresponding components. Any other
 ;; component is searched using option --COMPNAME, for example: `pick
 ;; --x-mailer mh-e'. Mailutils "pick" supports this option using a certain
 ;; kludge, but it prefers the following syntax for this purpose:

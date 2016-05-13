@@ -1,6 +1,6 @@
 ;;; midnight.el --- run something every midnight, e.g., kill old buffers  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1998, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998, 2001-2016 Free Software Foundation, Inc.
 
 ;; Author: Sam Steingold <sds@gnu.org>
 ;; Maintainer: Sam Steingold <sds@gnu.org>
@@ -53,8 +53,12 @@ the time when it is run.")
   "Non-nil means run `midnight-hook' at midnight."
   :global t
   :initialize #'custom-initialize-default
-  (if midnight-mode (timer-activate midnight-timer)
-    (cancel-timer midnight-timer)))
+  ;; Disable first, since the ':initialize' function above already
+  ;; starts the timer when the mode is turned on for the first time,
+  ;; via setting 'midnight-delay', which calls 'midnight-delay-set',
+  ;; which starts the timer.
+  (when (timerp midnight-timer) (cancel-timer midnight-timer))
+  (if midnight-mode (timer-activate midnight-timer)))
 
 ;;; time conversion
 
@@ -217,7 +221,7 @@ You should set this variable before loading midnight.el, or
 set it by calling `midnight-delay-set', or use `custom'.
 If you wish, you can use a string instead, it will be passed as the
 first argument to `run-at-time'."
-  :type 'sexp
+  :type '(choice integer string)
   :set #'midnight-delay-set)
 
 (provide 'midnight)

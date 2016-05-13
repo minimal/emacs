@@ -1,6 +1,6 @@
 ;;; sort-tests.el --- Tests for sort.el              -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2015 Free Software Foundation, Inc.
+;; Copyright (C) 2015-2016 Free Software Foundation, Inc.
 
 ;; Author: Artur Malabarba <bruce.connor.am@gmail.com>
 
@@ -40,8 +40,10 @@
     (funcall function reverse (point-min) (point-max))
     (let ((sorted-words
            (mapconcat #'identity
-                      (let ((x (sort (copy-sequence words) less-predicate)))
-                        (if reverse (reverse x) x))
+                      (sort (copy-sequence words)
+                            (if reverse
+                                (lambda (a b) (funcall less-predicate b a))
+                              less-predicate))
                       separator)))
       (should (string= (substring (buffer-string) 0 -1) sorted-words)))))
 

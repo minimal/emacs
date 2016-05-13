@@ -1,6 +1,6 @@
 ;;; calculator.el --- a calculator for Emacs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1998, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998, 2000-2016 Free Software Foundation, Inc.
 
 ;; Author: Eli Barzilay <eli@barzilay.org>
 ;; Keywords: tools, convenience
@@ -65,7 +65,7 @@ Note that this requires easymenu.  Must be set before loading."
   :group 'calculator)
 
 (defcustom calculator-unary-style 'postfix
-  "Value is either 'prefix or 'postfix.
+  "Value is either `prefix' or `postfix'.
 This determines the default behavior of unary operators."
   :type    '(choice (const prefix) (const postfix))
   :group   'calculator)
@@ -332,10 +332,10 @@ documentation for an example.")
   "A table to convert input characters to corresponding radix symbols.")
 
 (defvar calculator-output-radix nil
-  "The mode for display, one of: nil (decimal), 'bin, 'oct or 'hex.")
+  "The mode for display, one of: nil (decimal), `bin', `oct' or `hex'.")
 
 (defvar calculator-input-radix nil
-  "The mode for input, one of: nil (decimal), 'bin, 'oct or 'hex.")
+  "The mode for input, one of: nil (decimal), `bin', `oct' or `hex'.")
 
 (defvar calculator-deg nil
   "Non-nil if trig functions operate on degrees instead of radians.")
@@ -394,7 +394,7 @@ Used for repeating operations in calculator-repR/L.")
                                      [kp-5] [kp-6] [kp-7] [kp-8] [kp-9])
              (calculator-op          [kp-divide] [kp-multiply])
              (calculator-decimal     "." [kp-decimal])
-             (calculator-exp         "e")
+             (calculator-exp         "e" "E")
              (calculator-dec/deg-mode "D")
              (calculator-set-register "s")
              (calculator-get-register "g")
@@ -1219,7 +1219,7 @@ arguments."
   "Last char (or event or event sequence) that was read.
 Use KEYS if given, otherwise use `this-command-keys'."
   (let ((inp (or keys (this-command-keys))))
-    (if (or (stringp inp) (not (arrayp inp)))
+    (if (or (stringp inp) (not (arrayp inp)) (member inp '([f1] [help])))
       inp
       ;; Translates kp-x to x and [tries to] create a string to lookup
       ;; operators; assume all symbols are translatable via

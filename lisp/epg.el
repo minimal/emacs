@@ -1,5 +1,5 @@
 ;;; epg.el --- the EasyPG Library -*- lexical-binding: t -*-
-;; Copyright (C) 1999-2000, 2002-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2000, 2002-2016 Free Software Foundation, Inc.
 
 ;; Author: Daiki Ueno <ueno@unixuser.org>
 ;; Keywords: PGP, GnuPG
@@ -186,11 +186,11 @@
                           compress-algorithm
                  &aux
                  (program
-                  (pcase protocol
-                    (`OpenPGP epg-gpg-program)
-                    (`CMS epg-gpgsm-program)
-                    (_ (signal 'epg-error
-                               (list "unknown protocol" protocol)))))))
+                  (let ((configuration (epg-find-configuration protocol)))
+                    (unless configuration
+                      (signal 'epg-error
+                              (list "no usable configuration" protocol)))
+                    (alist-get 'program configuration)))))
                (:copier nil)
                (:predicate nil))
   protocol
@@ -551,6 +551,8 @@ callback data (if any)."
 (defun epg-errors-to-string (errors)
   (mapconcat #'epg-error-to-string errors "; "))
 
+(declare-function pinentry-start "pinentry" (&optional quiet))
+
 (defun epg--start (context args)
   "Start `epg-gpg-program' in a subprocess with given ARGS."
   (if (and (epg-context-process context)
@@ -614,7 +616,7 @@ callback data (if any)."
 		   (re-search-forward
                     "^allow-emacs-pinentry:\\(?:.*:\\)\\{8\\}1"
                     nil t))))
-      (pinentry-start))
+      (pinentry-start 'quiet))
     (setq process-environment
 	  (cons (format "INSIDE_EMACS=%s,epg" emacs-version)
 		process-environment))
@@ -1337,8 +1339,8 @@ callback data (if any)."
 
 (defun epg-list-keys (context &optional name mode)
   "Return a list of epg-key objects matched with NAME.
-If MODE is nil or 'public, only public keyring should be searched.
-If MODE is t or 'secret, only secret keyring should be searched.
+If MODE is nil or `public', only public keyring should be searched.
+If MODE is t or `secret', only secret keyring should be searched.
 Otherwise, only public keyring should be searched and the key
 signatures should be included.
 NAME is either a string or a list of strings."
@@ -1678,8 +1680,8 @@ which will return a list of `epg-signature' object."
   "Initiate a sign operation on PLAIN.
 PLAIN is a data object.
 
-If optional 3rd argument MODE is t or 'detached, it makes a detached signature.
-If it is nil or 'normal, it makes a normal signature.
+If optional 3rd argument MODE is t or `detached', it makes a detached signature.
+If it is nil or `normal', it makes a normal signature.
 Otherwise, it makes a cleartext signature.
 
 If you use this function, you will need to wait for the completion of
@@ -1722,8 +1724,8 @@ If you are unsure, use synchronous version of this function
 (defun epg-sign-file (context plain signature &optional mode)
   "Sign a file PLAIN and store the result to a file SIGNATURE.
 If SIGNATURE is nil, it returns the result as a string.
-If optional 3rd argument MODE is t or 'detached, it makes a detached signature.
-If it is nil or 'normal, it makes a normal signature.
+If optional 3rd argument MODE is t or `detached', it makes a detached signature.
+If it is nil or `normal', it makes a normal signature.
 Otherwise, it makes a cleartext signature."
   (unwind-protect
       (progn
@@ -1743,8 +1745,8 @@ Otherwise, it makes a cleartext signature."
 
 (defun epg-sign-string (context plain &optional mode)
   "Sign a string PLAIN and return the output as string.
-If optional 3rd argument MODE is t or 'detached, it makes a detached signature.
-If it is nil or 'normal, it makes a normal signature.
+If optional 3rd argument MODE is t or `detached', it makes a detached signature.
+If it is nil or `normal', it makes a normal signature.
 Otherwise, it makes a cleartext signature."
   (let ((input-file
 	 (unless (or (eq (epg-context-protocol context) 'CMS)

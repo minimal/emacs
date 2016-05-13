@@ -1,6 +1,6 @@
 ;;; url-util.el --- Miscellaneous helper routines for URL library
 
-;; Copyright (C) 1996-1999, 2001, 2004-2015 Free Software Foundation,
+;; Copyright (C) 1996-1999, 2001, 2004-2016 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Bill Perry <wmperry@gnu.org>
@@ -160,7 +160,7 @@ conversion.  Replaces these characters as follows:
 
 ;;;###autoload
 (defun url-normalize-url (url)
-  "Return a 'normalized' version of URL.
+  "Return a \"normalized\" version of URL.
 Strips out default port numbers, etc."
   (let (type data retval)
     (setq data (url-generic-parse-url url)
@@ -188,7 +188,7 @@ Will not do anything if `url-show-status' is nil."
 
 ;;;###autoload
 (defun url-get-normalized-date (&optional specified-time)
- "Return a 'real' date string that most HTTP servers can understand."
+ "Return a date string that most HTTP servers can understand."
  (let ((system-time-locale "C"))
   (format-time-string "%a, %d %b %Y %T GMT" specified-time t)))
 

@@ -1,6 +1,6 @@
 ;;; tramp.el --- Transparent Remote Access, Multiple Protocol
 
-;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2016 Free Software Foundation, Inc.
 
 ;; Author: Kai Großjohann <kai.grossjohann@gmx.net>
 ;;         Michael Albinus <michael.albinus@gmx.de>
@@ -180,7 +180,7 @@ use for the remote host."
   :type '(file :must-match t))
 
 (defcustom tramp-encoding-command-switch
-  (if (string-match "cmd\\.exe" tramp-encoding-shell)
+  (if (string-match "cmd\\.exe" (or tramp-encoding-shell ""))
       "/c"
     "-c")
   "Use this switch together with `tramp-encoding-shell' for local commands.
@@ -189,7 +189,7 @@ See the variable `tramp-encoding-shell' for more information."
   :type 'string)
 
 (defcustom tramp-encoding-command-interactive
-  (unless (string-match "cmd\\.exe" tramp-encoding-shell) "-i")
+  (unless (string-match "cmd\\.exe" (or tramp-encoding-shell "")) "-i")
   "Use this switch together with `tramp-encoding-shell' for interactive shells.
 See the variable `tramp-encoding-shell' for more information."
   :version "24.1"
@@ -694,8 +694,8 @@ Useful for \"rsync\" like methods.")
 
 It can have the following values:
 
-  'ftp -- Ange-FTP respective EFS like syntax (GNU Emacs default)
-  'sep -- Syntax as defined for XEmacs."
+  `ftp' -- Ange-FTP respective EFS like syntax (GNU Emacs default)
+  `sep' -- Syntax as defined for XEmacs."
   :group 'tramp
   :version "24.4"
   :type `(choice (const :tag  ,(if (featurep 'xemacs) "EFS" "Ange-FTP") ftp)
@@ -1291,8 +1291,8 @@ This is HOST, if non-nil. Otherwise, it is `tramp-default-host'."
 
 (defun tramp-dissect-file-name (name &optional nodefault)
   "Return a `tramp-file-name' structure.
-The structure consists of remote method, remote user, remote host
-and localname (file name on remote host).  If NODEFAULT is
+The structure consists of remote method, remote user, remote host,
+localname (file name on remote host) and hop.  If NODEFAULT is
 non-nil, the file name parts are not expanded to their default
 values."
   (save-match-data
@@ -2910,9 +2910,29 @@ User is always nil."
   (and (file-directory-p filename)
        (file-readable-p filename)))
 
+(defun tramp-handle-file-equal-p (filename1 filename2)
+  "Like `file-equalp-p' for Tramp files."
+  ;; Native `file-equalp-p' calls `file-truename', which requires a
+  ;; remote connection.  This can be avoided, if FILENAME1 and
+  ;; FILENAME2 are not located on the same remote host.
+  (when (string-equal
+	 (file-remote-p (expand-file-name filename1))
+	 (file-remote-p (expand-file-name filename2)))
+    (tramp-run-real-handler 'file-equal-p (list filename1 filename2))))
+
 (defun tramp-handle-file-exists-p (filename)
   "Like `file-exists-p' for Tramp files."
   (not (null (file-attributes filename))))
+
+(defun tramp-handle-file-in-directory-p (filename directory)
+  "Like `file-in-directory-p' for Tramp files."
+  ;; Native `file-in-directory-p' calls `file-truename', which
+  ;; requires a remote connection.  This can be avoided, if FILENAME
+  ;; and DIRECTORY are not located on the same remote host.
+  (when (string-equal
+	 (file-remote-p (expand-file-name filename))
+	 (file-remote-p (expand-file-name directory)))
+    (tramp-run-real-handler 'file-in-directory-p (list filename directory))))
 
 (defun tramp-handle-file-modes (filename)
   "Like `file-modes' for Tramp files."
@@ -2989,7 +3009,8 @@ User is always nil."
     (when (tramp-tramp-file-p filename)
       (let* ((v (tramp-dissect-file-name filename))
 	     (p (tramp-get-connection-process v))
-	     (c (and p (processp p) (memq (process-status p) '(run open)))))
+	     (c (and p (processp p) (memq (process-status p) '(run open))
+		     (tramp-get-connection-property p "connected" nil))))
 	;; We expand the file name only, if there is already a connection.
 	(with-parsed-tramp-file-name
 	    (if c (expand-file-name filename) filename) nil
@@ -3917,6 +3938,26 @@ This is used internally by `tramp-file-mode-from-int'."
   (if (and (fboundp 'group-gid) (equal id-format 'integer))
       (tramp-compat-funcall 'group-gid)
     (nth 3 (tramp-compat-file-attributes "~/" id-format))))
+
+(defun tramp-get-local-locale (&optional vec)
+  ;; We use key nil for local connection properties.
+  (with-tramp-connection-property nil "locale"
+    (let ((candidates '("en_US.utf8" "C.utf8" "en_US.UTF-8"))
+	  locale)
+      (with-temp-buffer
+	(unless (or (memq system-type '(windows-nt))
+                    (not (zerop (tramp-call-process
+                                 nil "locale" nil t nil "-a"))))
+	  (while candidates
+	    (goto-char (point-min))
+	    (if (string-match (format "^%s\r?$" (regexp-quote (car candidates)))
+			      (buffer-string))
+		(setq locale (car candidates)
+		      candidates nil)
+	      (setq candidates (cdr candidates))))))
+      ;; Return value.
+      (when vec (tramp-message vec 7 "locale %s" (or locale "C")))
+      (or locale "C"))))
 
 ;;;###tramp-autoload
 (defun tramp-check-cached-permissions (vec access)

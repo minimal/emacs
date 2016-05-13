@@ -1,6 +1,6 @@
 ;;; gnus-start.el --- startup functions for Gnus
 
-;; Copyright (C) 1996-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2016 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -121,7 +121,6 @@ longer necessary, so you could safely set `gnus-save-killed-list' to nil.
 This variable can be a list of select methods which Gnus will query with
 the `ask-server' method in addition to the primary, secondary, and archive
 servers.
-
 
 E.g.:
   (setq gnus-check-new-newsgroups
@@ -863,7 +862,9 @@ If REGEXP is given, lines that match it will be deleted."
 	    (goto-char (match-beginning 0))
 	    (delete-region (point-at-bol) end))))
       (goto-char (point-max))
-      (insert string "\n")
+      ;; Make sure that each dribble entry is a single line, so that
+      ;; the "remove" code above works.
+      (insert (replace-regexp-in-string "\n" "\\\\n" string) "\n")
       ;; This has been commented by Josh Huber <huber@alum.wpi.edu>
       ;; It causes problems with both XEmacs and Emacs 21, and doesn't
       ;; seem to be of much value. (FIXME: remove this after we make sure
@@ -1673,10 +1674,11 @@ backend check whether the group actually exists."
 	(push (setq method-group-list (list method method-type nil nil))
 	      type-cache))
       ;; Only add groups that need updating.
-      (if (funcall (if one-level #'= #'<=) (gnus-info-level info)
-	      (if (eq (cadr method-group-list) 'foreign)
-		  foreign-level
-		alevel))
+      (if (or (and foreign-level (null (numberp foreign-level)))
+	      (funcall (if one-level #'= #'<=) (gnus-info-level info)
+		       (if (eq (cadr method-group-list) 'foreign)
+			   foreign-level
+			 alevel)))
 	  (setcar (nthcdr 2 method-group-list)
 		  (cons info (nth 2 method-group-list)))
 	;; The group is inactive, so we nix out the number of unread articles.

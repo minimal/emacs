@@ -1,6 +1,6 @@
 ;;; cc-align.el --- custom indentation functions for CC Mode
 
-;; Copyright (C) 1985, 1987, 1992-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2016 Free Software Foundation, Inc.
 
 ;; Authors:    2004- Alan Mackenzie
 ;;             1998- Martin Stjernholm
@@ -449,7 +449,7 @@ class Foo             class Foo
 Works with: inher-cont."
   (save-excursion
     (goto-char (c-langelem-pos langelem))
-    (forward-word 1)
+    (forward-word-strictly 1)
     (if (looking-at "[ \t]*$")
 	c-basic-offset
       (c-forward-syntactic-ws)

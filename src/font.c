@@ -1,6 +1,6 @@
 /* font.c -- "Font" primitives.
 
-Copyright (C) 2006-2015 Free Software Foundation, Inc.
+Copyright (C) 2006-2016 Free Software Foundation, Inc.
 Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011
   National Institute of Advanced Industrial Science and Technology (AIST)
   Registration Number H13PRO009
@@ -9,8 +9,8 @@ This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -4036,7 +4036,13 @@ The value of :otf is a cons (GSUB . GPOS) where GSUB and GPOS are lists
 representing the OpenType features supported by the font by this form:
   ((SCRIPT (LANGSYS FEATURE ...) ...) ...)
 SCRIPT, LANGSYS, and FEATURE are all symbols representing OpenType
-Layout tags.  */)
+Layout tags.
+
+In addition to the keys listed abobe, the following keys are reserved
+for the specific meanings as below:
+
+The value of :combining-capability is non-nil if the font-backend of
+FONT supports rendering of combining characters for non-OTF fonts.  */)
   (Lisp_Object font, Lisp_Object key)
 {
   int idx;
@@ -4051,14 +4057,22 @@ Layout tags.  */)
   if (idx >= 0 && idx < FONT_EXTRA_INDEX)
     return AREF (font, idx);
   val = Fassq (key, AREF (font, FONT_EXTRA_INDEX));
-  if (NILP (val) && EQ (key, QCotf) && FONT_OBJECT_P (font))
+  if (NILP (val) && FONT_OBJECT_P (font))
     {
       struct font *fontp = XFONT_OBJECT (font);
 
-      if (fontp->driver->otf_capability)
-	val = fontp->driver->otf_capability (fontp);
-      else
-	val = Fcons (Qnil, Qnil);
+      if (EQ (key, QCotf))
+	{
+	  if (fontp->driver->otf_capability)
+	    val = fontp->driver->otf_capability (fontp);
+	  else
+	    val = Fcons (Qnil, Qnil);
+	}
+      else if (EQ (key, QCcombining_capability))
+	{
+	  if (fontp->driver->combining_capability)
+	    val = fontp->driver->combining_capability (fontp);
+	}
     }
   else
     val = Fcdr (val);
@@ -4072,7 +4086,7 @@ DEFUN ("font-face-attributes", Ffont_face_attributes, Sfont_face_attributes, 1, 
 FONT is a font name, a font-spec, a font-entity, or a font-object.
 The return value is a list of the form
 
-(:family FAMILY :height HEIGHT :weight WEIGHT :slant SLANT :width WIDTH)
+\(:family FAMILY :height HEIGHT :weight WEIGHT :slant SLANT :width WIDTH)
 
 where FAMILY, HEIGHT, WEIGHT, SLANT, and WIDTH are face attribute values
 compatible with `set-face-attribute'.  Some of these key-attribute pairs
@@ -5290,6 +5304,7 @@ syms_of_font (void)
   DEFSYM (QCscalable, ":scalable");
   DEFSYM (QCavgwidth, ":avgwidth");
   DEFSYM (QCfont_entity, ":font-entity");
+  DEFSYM (QCcombining_capability, ":combining-capability");
 
   /* Symbols representing values of font spacing property.  */
   DEFSYM (Qc, "c");
@@ -5302,7 +5317,7 @@ syms_of_font (void)
   DEFSYM (Qja, "ja");
   DEFSYM (Qko, "ko");
 
-  DEFSYM (QCuser_spec, "user-spec");
+  DEFSYM (QCuser_spec, ":user-spec");
 
   staticpro (&scratch_font_spec);
   scratch_font_spec = Ffont_spec (0, NULL);
@@ -5363,7 +5378,7 @@ where ENCODING is a charset or a char-table,
 and REPERTORY is a charset, a char-table, or nil.
 
 If ENCODING and REPERTORY are the same, the element can have the form
-(REGEXP . ENCODING).
+\(REGEXP . ENCODING).
 
 ENCODING is for converting a character to a glyph code of the font.
 If ENCODING is a charset, encoding a character by the charset gives

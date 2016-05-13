@@ -1,13 +1,13 @@
 /* Image support for the NeXT/Open/GNUstep and MacOSX window system.
-   Copyright (C) 1989, 1992-1994, 2005-2006, 2008-2015 Free Software
+   Copyright (C) 1989, 1992-1994, 2005-2006, 2008-2016 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -66,7 +66,7 @@ ns_image_for_XPM (int width, int height, int depth)
 void *
 ns_image_from_file (Lisp_Object file)
 {
-  NSTRACE ("ns_image_from_bitmap_file");
+  NSTRACE ("ns_image_from_file");
   return [EmacsImage allocInitFromFile: file];
 }
 

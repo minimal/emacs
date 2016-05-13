@@ -1,6 +1,6 @@
 ;;; woman.el --- browse UN*X manual pages `wo (without) man'
 
-;; Copyright (C) 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2000-2016 Free Software Foundation, Inc.
 
 ;; Author: Francis J. Wright <F.J.Wright@qmul.ac.uk>
 ;; Maintainer: emacs-devel@gnu.org
@@ -738,7 +738,7 @@ the `woman' command to update and re-write the cache."
 
 (defcustom woman-dired-keys t
   "List of `dired' mode keys to define to run WoMan on current file.
-E.g. '(\"w\" \"W\"), or any non-null atom to automatically define
+E.g. (\"w\" \"W\"), or any non-null atom to automatically define
 \"w\" and \"W\" if they are unbound, or nil to do nothing.
 Default is t."
   :type '(choice (const :tag "None" nil)
@@ -752,7 +752,10 @@ Default is t."
   "Imenu support for Sections and Subsections.
 An alist with elements of the form (MENU-TITLE REGEXP INDEX) --
 see the documentation for `imenu-generic-expression'."
-  :type 'sexp
+  :type '(alist :key-type (choice :tag "Title" (const nil) string)
+                :value-type (group (choice (string :tag "Regexp")
+                                           function)
+                                   integer))
   :group 'woman-interface)
 
 (defcustom woman-imenu nil
@@ -1102,7 +1105,7 @@ The ordinal numbers start from 0.")
 (defvar woman-if-conditions-true '(?n ?e ?o)
   "List of one-character built-in condition names that are true.
 Should include ?e, ?o (page even/odd) and either ?n (nroff) or ?t (troff).
-Default is '(?n ?e ?o).  Set via `woman-emulation'.")
+Default is (?n ?e ?o).  Set via `woman-emulation'.")
 
 
 ;;; Specialized utility functions:
@@ -1651,7 +1654,7 @@ Do not call directly!"
 	     (setq woman-frame (make-frame)))))
     (set-buffer (get-buffer-create bufname))
     (condition-case nil
-        (display-buffer (current-buffer))
+        (pop-to-buffer-same-window (current-buffer))
       (error (pop-to-buffer (current-buffer))))
     (buffer-disable-undo)
     (setq buffer-read-only nil)
@@ -1749,7 +1752,7 @@ Leave point at end of new text.  Return length of inserted text."
   ;; start in 19.34!
   (save-excursion
     (let ((case-fold-search t))
-      ;; Co-operate with auto-compression mode:
+      ;; Cooperate with auto-compression mode:
       (if (and compressed
 	       (or (eq compressed t)
 		   (string-match-p woman-file-compression-regexp filename))
@@ -2061,14 +2064,14 @@ alist in `woman-buffer-alist' and return nil."
   (if (zerop woman-buffer-number)
       (let ((buffer (get-buffer (cdr (car woman-buffer-alist)))))
 	(if buffer
-	    (display-buffer buffer)
+	    (pop-to-buffer-same-window buffer)
 	  ;; Delete alist element:
 	  (setq woman-buffer-alist (cdr woman-buffer-alist))
 	  nil))
     (let* ((prev-ptr (nthcdr (1- woman-buffer-number) woman-buffer-alist))
 	   (buffer (get-buffer (cdr (car (cdr prev-ptr))))))
       (if buffer
-	  (display-buffer buffer)
+	  (pop-to-buffer-same-window buffer)
 	;; Delete alist element:
 	(setcdr prev-ptr (cdr (cdr prev-ptr)))
 	(if (>= woman-buffer-number (length woman-buffer-alist))
@@ -2218,7 +2221,7 @@ To be called on original buffer and any .so insertions."
 (defvar woman-emulate-tbl nil
   "True if WoMan should emulate the tbl preprocessor.
 This applies to text between .TE and .TS directives.
-Currently set only from '\" t in the first line of the source file.")
+Currently set only from \\='\\\" t in the first line of the source file.")
 
 (defun woman-decode-region (from _to)
   "Decode the region between FROM and TO in UN*X man-page source format."

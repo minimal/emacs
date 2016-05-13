@@ -1,6 +1,6 @@
 ;;; rect.el --- rectangle functions for GNU Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985, 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1999-2016 Free Software Foundation, Inc.
 
 ;; Maintainer: Didier Verna <didier@xemacs.org>
 ;; Keywords: internal
@@ -257,6 +257,19 @@ Return it as a list of strings, one for each line of the rectangle."
     (apply-on-rectangle 'extract-rectangle-line start end lines)
     (nreverse (cdr lines))))
 
+(defun extract-rectangle-bounds (start end)
+  "Return the bounds of the rectangle with corners at START and END.
+Return it as a list of (START . END) positions, one for each line of
+the rectangle."
+  (let (bounds)
+    (apply-on-rectangle
+     (lambda (startcol endcol)
+       (move-to-column startcol)
+       (push (cons (prog1 (point) (move-to-column endcol)) (point))
+	     bounds))
+     start end)
+    (nreverse bounds)))
+
 (defvar killed-rectangle nil
   "Rectangle for `yank-rectangle' to insert.")
 
@@ -385,48 +398,51 @@ With a prefix (or a FILL) argument, also fill too short lines."
 (defun rectangle--space-to (col)
   (propertize " " 'display `(space :align-to ,col)))
 
-(defface rectangle-preview-face '((t :inherit region))
-  "The face to use for the `string-rectangle' preview.")
+(defface rectangle-preview '((t :inherit region))
+  "The face to use for the `string-rectangle' preview."
+  :version "25.1")
 
 (defcustom rectangle-preview t
   "If non-nil, `string-rectangle' will show an-the-fly preview."
+  :version "25.1"
   :type 'boolean)
 
 (defun rectangle--string-preview ()
-  (let ((str (minibuffer-contents)))
-    (when (equal str "")
-      (setq str (or (car-safe minibuffer-default)
-                    (if (stringp minibuffer-default) minibuffer-default))))
-    (when str (setq str (propertize str 'face 'region)))
-    (with-selected-window rectangle--string-preview-window
-      (unless (or (null rectangle--string-preview-state)
-                  (equal str (car rectangle--string-preview-state)))
-        (rectangle--string-flush-preview)
-        (apply-on-rectangle
-         (lambda (startcol endcol)
-           (let* ((sc (move-to-column startcol))
-                  (start (if (<= sc startcol) (point)
-                           (forward-char -1)
-                           (setq sc (current-column))
-                           (point)))
-                  (ec (move-to-column endcol))
-                  (end (point))
-                  (ol (make-overlay start end)))
-             (push ol (nthcdr 3 rectangle--string-preview-state))
-             ;; FIXME: The extra spacing doesn't interact correctly with
-             ;; the extra spacing added by the rectangular-region-highlight.
-             (when (< sc startcol)
-               (overlay-put ol 'before-string (rectangle--space-to startcol)))
-             (let ((as (when (< endcol ec)
-                         ;; (rectangle--space-to ec)
-                         (spaces-string (- ec endcol))
-                         )))
-               (if (= start end)
-                   (overlay-put ol 'after-string (if as (concat str as) str))
-                 (overlay-put ol 'display str)
-                 (if as (overlay-put ol 'after-string as))))))
-         (nth 1 rectangle--string-preview-state)
-         (nth 2 rectangle--string-preview-state))))))
+  (when rectangle-preview
+    (let ((str (minibuffer-contents)))
+      (when (equal str "")
+        (setq str (or (car-safe minibuffer-default)
+                      (if (stringp minibuffer-default) minibuffer-default))))
+      (when str (setq str (propertize str 'face 'rectangle-preview)))
+      (with-selected-window rectangle--string-preview-window
+        (unless (or (null rectangle--string-preview-state)
+                    (equal str (car rectangle--string-preview-state)))
+          (rectangle--string-flush-preview)
+          (apply-on-rectangle
+           (lambda (startcol endcol)
+             (let* ((sc (move-to-column startcol))
+                    (start (if (<= sc startcol) (point)
+                             (forward-char -1)
+                             (setq sc (current-column))
+                             (point)))
+                    (ec (move-to-column endcol))
+                    (end (point))
+                    (ol (make-overlay start end)))
+               (push ol (nthcdr 3 rectangle--string-preview-state))
+               ;; FIXME: The extra spacing doesn't interact correctly with
+               ;; the extra spacing added by the rectangular-region-highlight.
+               (when (< sc startcol)
+                 (overlay-put ol 'before-string (rectangle--space-to startcol)))
+               (let ((as (when (< endcol ec)
+                           ;; (rectangle--space-to ec)
+                           (spaces-string (- ec endcol))
+                           )))
+                 (if (= start end)
+                     (overlay-put ol 'after-string (if as (concat str as) str))
+                   (overlay-put ol 'display str)
+                   (if as (overlay-put ol 'after-string as))))))
+           (nth 1 rectangle--string-preview-state)
+           (nth 2 rectangle--string-preview-state)))))))
 
 ;; FIXME: Should this be turned into inhibit-region-highlight and made to apply
 ;; to non-rectangular regions as well?
@@ -563,6 +579,8 @@ with a prefix argument, prompt for START-AT and FORMAT."
               #'rectangle--unhighlight-for-redisplay)
 (add-function :around region-extract-function
               #'rectangle--extract-region)
+(add-function :around region-insert-function
+              #'rectangle--insert-region)
 
 (defvar rectangle-mark-mode-map
   (let ((map (make-sparse-keymap)))
@@ -681,8 +699,12 @@ Ignores `line-move-visual'."
 
 
 (defun rectangle--extract-region (orig &optional delete)
-  (if (not rectangle-mark-mode)
-      (funcall orig delete)
+  (cond
+   ((not rectangle-mark-mode)
+    (funcall orig delete))
+   ((eq delete 'bounds)
+    (extract-rectangle-bounds (region-beginning) (region-end)))
+   (t
     (let* ((strs (funcall (if delete
                               #'delete-extract-rectangle
                             #'extract-rectangle)
@@ -696,7 +718,14 @@ Ignores `line-move-visual'."
         (put-text-property 0 (length str) 'yank-handler
                            `(rectangle--insert-for-yank ,strs t)
                            str)
-        str))))
+        str)))))
+
+(defun rectangle--insert-region (orig strings)
+  (cond
+   ((not rectangle-mark-mode)
+    (funcall orig strings))
+   (t
+    (funcall #'insert-rectangle strings))))
 
 (defun rectangle--insert-for-yank (strs)
   (push (point) buffer-undo-list)
@@ -754,7 +783,7 @@ Ignores `line-move-visual'."
                      (if (not old)
                          (let ((ol (make-overlay left right)))
                            (overlay-put ol 'window window)
-                           (overlay-put ol 'face 'region)
+                           (overlay-put ol 'face 'rectangle-preview)
                            ol)
                        (let ((ol (pop old)))
                          (move-overlay ol left right (current-buffer))
@@ -786,7 +815,7 @@ Ignores `line-move-visual'."
                      (overlay-put ol 'after-string nil)))
                 ((< mright rightcol)    ;`rightcol' is past EOL.
                  (let ((str (rectangle--space-to rightcol)))
-                   (put-text-property 0 (length str) 'face 'region str)
+                   (put-text-property 0 (length str) 'face 'rectangle-preview str)
                    ;; If cursor happens to be here, draw it at the right place.
                    (rectangle--place-cursor leftcol left str)
                    (overlay-put ol 'after-string str)))
@@ -798,7 +827,7 @@ Ignores `line-move-visual'."
                      (overlay-put ol 'after-string nil)
                    (goto-char right)
                    (let ((str (rectangle--space-to rightcol)))
-                     (put-text-property 0 (length str) 'face 'region str)
+                     (put-text-property 0 (length str) 'face 'rectangle-preview str)
                      (when (= left right)
                        (rectangle--place-cursor leftcol left str))
                      (overlay-put ol 'after-string str))))
@@ -808,7 +837,7 @@ Ignores `line-move-visual'."
                  ;; Make zero-width rectangles visible!
                  (overlay-put ol 'after-string
                               (concat (propertize " "
-                                                  'face '(region (:height 0.2)))
+                                                  'face '(rectangle-preview (:height 0.2)))
                                       (overlay-get ol 'after-string))))
                (push ol nrol)))
            start end))

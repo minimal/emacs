@@ -1,6 +1,6 @@
 ;;; mailabbrev.el --- abbrev-expansion of mail aliases
 
-;; Copyright (C) 1985-1987, 1992-1993, 1996-1997, 2000-2015 Free
+;; Copyright (C) 1985-1987, 1992-1993, 1996-1997, 2000-2016 Free
 ;; Software Foundation, Inc.
 
 ;; Author: Jamie Zawinski <jwz@lucid.com; now jwz@jwz.org>
@@ -574,7 +574,7 @@ of a mail alias.  The value is set up, buffer-local, when first needed.")
   (let ((end (point))
         (beg (with-syntax-table mail-abbrev-syntax-table
                (save-excursion
-                 (backward-word 1)
+                 (backward-word-strictly 1)
                  (point)))))
     (completion-in-region beg end mail-abbrevs)))
 

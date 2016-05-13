@@ -1,6 +1,6 @@
 ;;; org-list.el --- Plain lists for Org-mode
 ;;
-;; Copyright (C) 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2016 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;;	   Bastien Guerry <bzg@gnu.org>
@@ -174,7 +174,7 @@ to the bullet that should be used when this item is demoted.
 For example,
 
  (setq org-list-demote-modify-bullet
-       '((\"+\" . \"-\") (\"-\" . \"+\") (\"*\" . \"+\")))
+       \\='((\"+\" . \"-\") (\"-\" . \"+\") (\"*\" . \"+\")))
 
 will make
 

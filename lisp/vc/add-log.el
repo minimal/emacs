@@ -1,6 +1,6 @@
 ;;; add-log.el --- change log maintenance commands for Emacs
 
-;; Copyright (C) 1985-1986, 1988, 1993-1994, 1997-1998, 2000-2015 Free
+;; Copyright (C) 1985-1986, 1988, 1993-1994, 1997-1998, 2000-2016 Free
 ;; Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -481,9 +481,10 @@ try to visit the file for the change under `point' instead."
 		(apply 'change-log-goto-source-1
 		       (append change-log-find-head change-log-find-tail))
 	      (error
-	       "Cannot find more matches for tag `%s' in file `%s'"
-	       (car change-log-find-head)
-	       (nth 2 change-log-find-head))))
+	       (format-message
+		"Cannot find more matches for tag `%s' in file `%s'"
+		(car change-log-find-head)
+		(nth 2 change-log-find-head)))))
     (save-excursion
       (let* ((at (point))
 	     (tag-at (change-log-search-tag-name))
@@ -515,8 +516,9 @@ try to visit the file for the change under `point' instead."
 	  (condition-case nil
 	      (setq change-log-find-tail
 		    (apply 'change-log-goto-source-1 change-log-find-head))
-	    (error "Cannot find matches for tag `%s' in file `%s'"
-		   tag file))))))))
+	    (error
+	     (format-message "Cannot find matches for tag `%s' in file `%s'"
+			     tag file)))))))))
 
 (defun change-log-next-error (&optional argp reset)
   "Move to the Nth (default 1) next match in a ChangeLog buffer.
@@ -573,10 +575,9 @@ Compatibility function for \\[next-error] invocations."
 ;; called add-log-time-zone-rule since it's only used from add-log-* code.
 (defvaralias 'change-log-time-zone-rule 'add-log-time-zone-rule)
 (defvar add-log-time-zone-rule nil
-  "Time zone used for calculating change log time stamps.
-It takes the same format as the TZ argument of `set-time-zone-rule'.
-If nil, use local time.
-If t, use universal time.")
+  "Time zone rule used for calculating change log time stamps.
+If nil, use local time.  If t, use Universal Time.
+If a string, interpret as the ZONE argument of `format-time-string'.")
 (put 'add-log-time-zone-rule 'safe-local-variable
      (lambda (x) (or (booleanp x) (stringp x))))
 

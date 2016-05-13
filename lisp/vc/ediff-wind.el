@@ -1,6 +1,6 @@
 ;;; ediff-wind.el --- window manipulation utilities
 
-;; Copyright (C) 1994-1997, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1997, 2000-2016 Free Software Foundation, Inc.
 
 ;; Author: Michael Kifer <kifer@cs.stonybrook.edu>
 ;; Package: ediff
@@ -201,7 +201,7 @@ Used internally---not a user option.")
 
 (defcustom ediff-grab-mouse t
   "If t, Ediff will always grab the mouse and put it in the control frame.
-If 'maybe, Ediff will do it sometimes, but not after operations that require
+If `maybe', Ediff will do it sometimes, but not after operations that require
 relatively long time.  If nil, the mouse will be entirely user's
 responsibility."
   :type 'boolean

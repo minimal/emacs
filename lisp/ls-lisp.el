@@ -1,6 +1,6 @@
 ;;; ls-lisp.el --- emulate insert-directory completely in Emacs Lisp
 
-;; Copyright (C) 1992, 1994, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992, 1994, 2000-2016 Free Software Foundation, Inc.
 
 ;; Author: Sebastian Kremer <sk@thp.uni-koeln.de>
 ;; Modified by: Francis J. Wright <F.J.Wright@maths.qmw.ac.uk>
@@ -348,7 +348,9 @@ SWITCHES is a *list* of characters.  TIME-INDEX is the time index into
 file-attributes according to SWITCHES.  WILDCARD-REGEXP is nil or an *Emacs
 regexp*.  FULL-DIRECTORY-P means file is a directory and SWITCHES does
 not contain `d', so that a full listing is expected."
-  (if (or wildcard-regexp full-directory-p)
+  (if (or (and wildcard-regexp
+               (not (string= "[^~]\\'" wildcard-regexp))) ; Switch -B pseudo-wildcard regexp
+          full-directory-p)
       (let* ((dir (file-name-as-directory file))
 	     (default-directory dir)	; so that file-attributes works
 	     (file-alist

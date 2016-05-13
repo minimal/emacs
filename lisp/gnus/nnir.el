@@ -1,6 +1,6 @@
 ;;; nnir.el --- search mail with various search engines -*- coding: utf-8 -*-
 
-;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2016 Free Software Foundation, Inc.
 
 ;; Author: Kai Großjohann <grossjohann@ls6.cs.uni-dortmund.de>
 ;; Swish-e and Swish++ backends by:
@@ -822,8 +822,10 @@ skips all prompting."
 (deffoo nnir-request-update-mark (group article mark)
   (let ((artgroup (nnir-article-group article))
 	(artnumber (nnir-article-number article)))
-    (when (and artgroup artnumber)
-      (gnus-request-update-mark artgroup artnumber mark))))
+    (or (and artgroup
+	     artnumber
+	     (gnus-request-update-mark artgroup artnumber mark))
+	mark)))
 
 (deffoo nnir-request-set-mark (group actions &optional server)
   (nnir-possibly-change-group group server)

@@ -1,6 +1,6 @@
 ;;; js.el --- Major mode for editing JavaScript  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2016 Free Software Foundation, Inc.
 
 ;; Author: Karl Landstrom <karl.landstrom@brgeight.se>
 ;;         Daniel Colascione <dan.colascione@gmail.com>
@@ -97,7 +97,7 @@ name.")
           "\\.\\(" js--name-re "\\)\\s-*?=\\s-*?\\(function\\)\\_>")
   "Regexp matching an explicit JavaScript prototype \"method\" declaration.
 Group 1 is a (possibly-dotted) class name, group 2 is a method name,
-and group 3 is the 'function' keyword.")
+and group 3 is the `function' keyword.")
 
 (defconst js--plain-class-re
   (concat "^\\s-*\\(" js--dotted-name-re "\\)\\.prototype"
@@ -831,14 +831,14 @@ lines."
 
 (defun js--forward-function-decl ()
   "Move forward over a JavaScript function declaration.
-This puts point at the 'function' keyword.
+This puts point at the `function' keyword.
 
 If this is a syntactically-correct non-expression function,
 return the name of the function, or t if the name could not be
 determined.  Otherwise, return nil."
   (cl-assert (looking-at "\\_<function\\_>"))
   (let ((name t))
-    (forward-word)
+    (forward-word-strictly)
     (forward-comment most-positive-fixnum)
     (when (eq (char-after) ?*)
       (forward-char)
@@ -1758,27 +1758,32 @@ This performs fontification according to `js--class-styles'."
                     (eq (char-after) ??))))
          (not (and
                (eq (char-after) ?*)
-               (looking-at (concat "\\* *" js--name-re " *("))
+               ;; Generator method (possibly using computed property).
+               (looking-at (concat "\\* *\\(?:\\[\\|" js--name-re " *(\\)"))
                (save-excursion
-                 (goto-char (1- (match-end 0)))
-                 (let (forward-sexp-function) (forward-sexp))
-                 (js--forward-syntactic-ws)
-                 (eq (char-after) ?{)))))))
+                 (js--backward-syntactic-ws)
+                 ;; We might misindent some expressions that would
+                 ;; return NaN anyway.  Shouldn't be a problem.
+                 (memq (char-before) '(?, ?} ?{))))))))
 
 (defun js--continued-expression-p ()
   "Return non-nil if the current line continues an expression."
   (save-excursion
     (back-to-indentation)
-    (or (js--looking-at-operator-p)
-        (and (js--re-search-backward "\n" nil t)
-	     (progn
-	       (skip-chars-backward " \t")
-	       (or (bobp) (backward-char))
-	       (and (> (point) (point-min))
-                    (save-excursion (backward-char) (not (looking-at "[/*]/")))
-                    (js--looking-at-operator-p)
-		    (and (progn (backward-char)
-				(not (looking-at "+\\+\\|--\\|/[/*]"))))))))))
+    (if (js--looking-at-operator-p)
+        (or (not (memq (char-after) '(?- ?+)))
+            (progn
+              (forward-comment (- (point)))
+              (not (memq (char-before) '(?, ?\[ ?\()))))
+      (and (js--re-search-backward "\n" nil t)
+           (progn
+             (skip-chars-backward " \t")
+             (or (bobp) (backward-char))
+             (and (> (point) (point-min))
+                  (save-excursion (backward-char) (not (looking-at "[/*]/")))
+                  (js--looking-at-operator-p)
+                  (and (progn (backward-char)
+                              (not (looking-at "+\\+\\|--\\|/[/*]"))))))))))
 
 
 (defun js--end-of-do-while-loop-p ()
@@ -1823,6 +1828,7 @@ nil."
                    (skip-syntax-backward " ")
                    (skip-syntax-backward "w_")
                    (looking-at js--possibly-braceless-keyword-re))
+                 (memq (char-before) '(?\s ?\t ?\n ?\}))
                  (not (js--end-of-do-while-loop-p))))
       (save-excursion
         (goto-char (match-beginning 0))
@@ -3366,8 +3372,8 @@ left-to-right."
 
 (defun js--read-tab (prompt)
   "Read a Mozilla tab with prompt PROMPT.
-Return a cons of (TYPE . OBJECT).  TYPE is either 'window or
-'tab, and OBJECT is a JavaScript handle to a ChromeWindow or a
+Return a cons of (TYPE . OBJECT).  TYPE is either `window' or
+`tab', and OBJECT is a JavaScript handle to a ChromeWindow or a
 browser, respectively."
 
   ;; Prime IDO
@@ -3778,12 +3784,12 @@ If one hasn't been set, or if it's stale, prompt for a new one."
   "Major mode for editing JSX.
 
 To customize the indentation for this mode, set the SGML offset
-variables (`sgml-basic-offset', `sgml-attribute-offset' et al)
+variables (`sgml-basic-offset', `sgml-attribute-offset' et al.)
 locally, like so:
 
   (defun set-jsx-indentation ()
     (setq-local sgml-basic-offset js-indent-level))
-  (add-hook 'js-jsx-mode-hook #'set-jsx-indentation)"
+  (add-hook \\='js-jsx-mode-hook #\\='set-jsx-indentation)"
   :group 'js
   (setq-local indent-line-function #'js-jsx-indent-line))
 

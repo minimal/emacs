@@ -1,6 +1,6 @@
 ;;; map-tests.el --- Tests for map.el  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2015 Free Software Foundation, Inc.
+;; Copyright (C) 2015-2016 Free Software Foundation, Inc.
 
 ;; Author: Nicolas Petton <nicolas@petton.fr>
 ;; Maintainer: emacs-devel@gnu.org
@@ -87,9 +87,16 @@ Evaluate BODY for each created map.
   (let ((vec [3 4 5]))
    (should-error (setf (map-elt vec 3) 6))))
 
+(ert-deftest test-map-put-alist-new-key ()
+  "Regression test for Bug#23105."
+  (let ((alist '((0 . a))))
+    (map-put alist 2 'b)
+    (should (eq (map-elt alist 2)
+                'b))))
+
 (ert-deftest test-map-put-return-value ()
   (let ((ht (make-hash-table)))
-    (should (eq (map-put ht 'a 'hello) ht))))
+    (should (eq (map-put ht 'a 'hello) 'hello))))
 
 (ert-deftest test-map-delete ()
   (with-maps-do map
@@ -126,16 +133,16 @@ Evaluate BODY for each created map.
     (should (null (map-nested-elt vec '(2 1 1))))
     (should (= 4 (map-nested-elt vec '(2 1 1) 4)))))
 
-(ert-deftest test-map-p ()
-  (should (map-p nil))
-  (should (map-p '((a . b) (c . d))))
-  (should (map-p '(a b c d)))
-  (should (map-p []))
-  (should (map-p [1 2 3]))
-  (should (map-p (make-hash-table)))
-  (should (map-p "hello"))
-  (should (not (map-p 1)))
-  (should (not (map-p 'hello))))
+(ert-deftest test-mapp ()
+  (should (mapp nil))
+  (should (mapp '((a . b) (c . d))))
+  (should (mapp '(a b c d)))
+  (should (mapp []))
+  (should (mapp [1 2 3]))
+  (should (mapp (make-hash-table)))
+  (should (mapp "hello"))
+  (should (not (mapp 1)))
+  (should (not (mapp 'hello))))
 
 (ert-deftest test-map-keys ()
   (with-maps-do map
@@ -319,6 +326,13 @@ Evaluate BODY for each created map.
     (should (= a 1))
     (should (= b 2))
     (should (null c))))
+
+(ert-deftest test-map-merge-with ()
+  (should (equal (map-merge-with 'list #'+
+                                 '((1 . 2))
+                                 '((1 . 3) (2 . 4))
+                                 '((1 . 1) (2 . 5) (3 . 0)))
+                 '((3 . 0) (2 . 9) (1 . 6)))))
 
 (provide 'map-tests)
 ;;; map-tests.el ends here

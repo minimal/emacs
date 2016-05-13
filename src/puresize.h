@@ -1,12 +1,12 @@
 /* How much read-only Lisp storage a dumped Emacs needs.
-   Copyright (C) 1993, 2001-2015 Free Software Foundation, Inc.
+   Copyright (C) 1993, 2001-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -81,20 +81,34 @@ extern _Noreturn void pure_write_error (Lisp_Object);
 
 extern EMACS_INT pure[];
 
+/* The puresize_h_* macros are private to this include file.  */
+
 /* True if PTR is pure.  */
+
+#define puresize_h_PURE_P(ptr) \
+  ((uintptr_t) (ptr) - (uintptr_t) pure <= PURESIZE)
+
 INLINE bool
 PURE_P (void *ptr)
 {
-  return (uintptr_t) (ptr) - (uintptr_t) pure <= PURESIZE;
+  return puresize_h_PURE_P (ptr);
 }
 
 /* Signal an error if OBJ is pure.  PTR is OBJ untagged.  */
+
+#define puresize_h_CHECK_IMPURE(obj, ptr) \
+  (PURE_P (ptr) ? pure_write_error (obj) : (void) 0)
+
 INLINE void
 CHECK_IMPURE (Lisp_Object obj, void *ptr)
 {
-  if (PURE_P (ptr))
-    pure_write_error (obj);
+  puresize_h_CHECK_IMPURE (obj, ptr);
 }
+
+#if DEFINE_KEY_OPS_AS_MACROS
+# define PURE_P(ptr) puresize_h_PURE_P (ptr)
+# define CHECK_IMPURE(obj, ptr) puresize_h_CHECK_IMPURE (obj, ptr)
+#endif
 
 INLINE_HEADER_END
 

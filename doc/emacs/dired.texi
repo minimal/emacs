@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2015 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 2000-2016 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Dired
@@ -550,7 +550,13 @@ Mark (with @samp{*}) all files whose @emph{contents} contain a match for
 the regular expression @var{regexp}
 (@code{dired-mark-files-containing-regexp}).  This command is like
 @kbd{% m}, except that it searches the file contents instead of the file
-name.
+name.  Note that if a file is visited in an Emacs buffer, this command
+will look in the buffer without revisiting the file, so the results
+might be inconsistent with the file on disk if its contents has changed
+since it was last visited.  If you don't want this, you may wish
+reverting the files you have visited in your buffers, or turning on
+the @code{auto-revert} mode in those buffers, before invoking this
+command.  @xref{Reverting}.
 
 @item C-/
 @itemx C-x u
@@ -778,27 +784,31 @@ Byte compile the specified Emacs Lisp files
 Compilation, elisp, The Emacs Lisp Reference Manual}.
 
 @kindex A @r{(Dired)}
-@findex dired-do-search
+@findex dired-do-find-regexp
 @cindex search multiple files (in Dired)
 @item A @var{regexp} @key{RET}
 Search all the specified files for the regular expression @var{regexp}
-(@code{dired-do-search}).
+(@code{dired-do-find-regexp}).
 
-This command is a variant of @code{tags-search}.  The search stops at
-the first match it finds; use @kbd{M-,} to resume the search and find
-the next match.  @xref{Tags Search}.
+This command is a variant of @code{xref-find-references}
+(@pxref{Identifier Search}), it displays the @file{*xref*} buffer,
+where you can navigate between matches and display them as needed
+using the commands described in @ref{Xref Commands}.
 
 @kindex Q @r{(Dired)}
-@findex dired-do-query-replace-regexp
+@findex dired-do-find-regexp-and-replace
 @cindex search and replace in multiple files (in Dired)
 @item Q @var{regexp} @key{RET} @var{to} @key{RET}
 Perform @code{query-replace-regexp} on each of the specified files,
 replacing matches for @var{regexp} with the string
-@var{to} (@code{dired-do-query-replace-regexp}).
+@var{to} (@code{dired-do-find-regexp-and-replace}).
 
-This command is a variant of @code{tags-query-replace}.  If you exit the
-query replace loop, you can use @kbd{M-,} to resume the scan and replace
-more matches.  @xref{Tags Search}.
+This command is a variant of @code{xref-query-replace-in-results}.  It
+presents an @file{*xref*} buffer that lists all the matches of @var{regexp},
+and you can use the special commands in that buffer (@pxref{Xref
+Commands}).  In particular, if you exit the query replace loop, you
+can use @kbd{r} in that buffer to replace more matches.
+@xref{Identifier Search}.
 @end table
 
 @node Shell Commands in Dired

@@ -1,6 +1,6 @@
 ;;; erc-match.el --- Highlight messages matching certain regexps
 
-;; Copyright (C) 2002-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2016 Free Software Foundation, Inc.
 
 ;; Author: Andreas Fuchs <asf@void.at>
 ;; Maintainer: emacs-devel@gnu.org
@@ -191,7 +191,7 @@ use for the logged message."
   "Flag specifying when matched message logging should happen.
 When nil, don't log any matched messages.
 When t, log messages.
-When 'away, log messages only when away."
+When `away', log messages only when away."
   :group 'erc-match
   :type '(choice (const nil)
 		 (const away)

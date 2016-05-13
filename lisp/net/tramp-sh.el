@@ -1,6 +1,6 @@
 ;;; tramp-sh.el --- Tramp access functions for (s)sh-like connections
 
-;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2016 Free Software Foundation, Inc.
 
 ;; (copyright statements below in code to be updated with the above notice)
 
@@ -486,6 +486,7 @@ The string is used in `tramp-methods'.")
 ;; Solaris: /usr/xpg4/bin:/usr/ccs/bin:/usr/bin:/opt/SUNWspro/bin
 ;; GNU/Linux (Debian, Suse): /bin:/usr/bin
 ;; FreeBSD: /usr/bin:/bin:/usr/sbin:/sbin: - beware trailing ":"!
+;; Darwin: /usr/bin:/bin:/usr/sbin:/sbin
 ;; IRIX64: /usr/bin
 ;;;###tramp-autoload
 (defcustom tramp-remote-path
@@ -597,9 +598,14 @@ we have this shell function.")
 use File::Spec;
 use Cwd \"realpath\";
 
+sub myrealpath {
+    my ($file) = @_;
+    return realpath($file) if -e $file;
+}
+
 sub recursive {
     my ($volume, @dirs) = @_;
-    my $real = realpath(File::Spec->catpath(
+    my $real = myrealpath(File::Spec->catpath(
                    $volume, File::Spec->catdir(@dirs), \"\"));
     if ($real) {
         my ($vol, $dir) = File::Spec->splitpath($real, 1);
@@ -613,7 +619,7 @@ sub recursive {
     }
 }
 
-$result = realpath($ARGV[0]);
+$result = myrealpath($ARGV[0]);
 if (!$result) {
     my ($vol, $dir) = File::Spec->splitpath($ARGV[0], 1);
     ($vol, @dirs) = recursive($vol, File::Spec->splitdir($dir));
@@ -621,10 +627,7 @@ if (!$result) {
     $result = File::Spec->catpath($vol, File::Spec->catdir(@dirs), \"\");
 }
 
-if ($ARGV[0] =~ /\\/$/) {
-    $result = $result . \"/\";
-}
-
+$result =~ s/\"/\\\\\"/g;
 print \"\\\"$result\\\"\\n\";
 ' \"$1\" 2>/dev/null"
   "Perl script to produce output suitable for use with `file-truename'
@@ -787,7 +790,7 @@ on the remote host.")
 (defconst tramp-perl-encode
   "%s -e '
 # This script contributed by Juanma Barranquero <lektu@terra.es>.
-# Copyright (C) 2002-2015 Free Software Foundation, Inc.
+# Copyright (C) 2002-2016 Free Software Foundation, Inc.
 use strict;
 
 my %%trans = do {
@@ -825,7 +828,7 @@ This string is passed to `format', so percent characters need to be doubled.")
 (defconst tramp-perl-decode
   "%s -e '
 # This script contributed by Juanma Barranquero <lektu@terra.es>.
-# Copyright (C) 2002-2015 Free Software Foundation, Inc.
+# Copyright (C) 2002-2016 Free Software Foundation, Inc.
 use strict;
 
 my %%trans = do {
@@ -993,10 +996,10 @@ of command line.")
     (file-acl . tramp-sh-handle-file-acl)
     (file-attributes . tramp-sh-handle-file-attributes)
     (file-directory-p . tramp-sh-handle-file-directory-p)
-    ;; `file-equal-p' performed by default handler.
+    (file-equal-p . tramp-handle-file-equal-p)
     (file-executable-p . tramp-sh-handle-file-executable-p)
     (file-exists-p . tramp-sh-handle-file-exists-p)
-    ;; `file-in-directory-p' performed by default handler.
+    (file-in-directory-p . tramp-handle-file-in-directory-p)
     (file-local-copy . tramp-sh-handle-file-local-copy)
     (file-modes . tramp-handle-file-modes)
     (file-name-all-completions . tramp-sh-handle-file-name-all-completions)
@@ -1097,15 +1100,19 @@ target of the symlink differ."
       ;; Right, they are on the same host, regardless of user, method,
       ;; etc.  We now make the link on the remote machine. This will
       ;; occur as the user that FILENAME belongs to.
-      (tramp-send-command-and-check
-       l
-       (format
-	"cd %s && %s -sf %s %s"
-	(tramp-shell-quote-argument cwd)
-	ln
-	(tramp-shell-quote-argument filename)
-	(tramp-shell-quote-argument l-localname))
-       t))))
+      (and (tramp-send-command-and-check
+            l (format "cd %s" (tramp-shell-quote-argument cwd)))
+           (tramp-send-command-and-check
+            l (format
+               "%s -sf %s %s"
+               ln
+               (tramp-shell-quote-argument filename)
+               ;; The command could exceed PATH_MAX, so we use
+               ;; relative file names.  However, relative file names
+               ;; could start with "-".  `tramp-shell-quote-argument'
+               ;; does not handle this, we must do it ourselves.
+               (tramp-shell-quote-argument
+                (concat "./" (file-name-nondirectory l-localname)))))))))
 
 (defun tramp-sh-handle-file-truename (filename)
   "Like `file-truename' for Tramp files."
@@ -1143,20 +1150,17 @@ target of the symlink differ."
 
 	   ;; Do it yourself.  We bind `directory-sep-char' here for
 	   ;; XEmacs on Windows, which would otherwise use backslash.
-	   (t (let* ((directory-sep-char ?/)
-		     (steps (tramp-compat-split-string localname "/"))
-		     (localnamedir (tramp-run-real-handler
-				    'file-name-as-directory (list localname)))
-		     (is-dir (string= localname localnamedir))
-		     (thisstep nil)
-		     (numchase 0)
-		     ;; Don't make the following value larger than
-		     ;; necessary.  People expect an error message in
-		     ;; a timely fashion when something is wrong;
-		     ;; otherwise they might think that Emacs is hung.
-		     ;; Of course, correctness has to come first.
-		     (numchase-limit 20)
-		     symlink-target)
+	   (t (let ((directory-sep-char ?/)
+		    (steps (tramp-compat-split-string localname "/"))
+		    (thisstep nil)
+		    (numchase 0)
+		    ;; Don't make the following value larger than
+		    ;; necessary.  People expect an error message in a
+		    ;; timely fashion when something is wrong;
+		    ;; otherwise they might think that Emacs is hung.
+		    ;; Of course, correctness has to come first.
+		    (numchase-limit 20)
+		    symlink-target)
 		(while (and steps (< numchase numchase-limit))
 		  (setq thisstep (pop steps))
 		  (tramp-message
@@ -1212,10 +1216,8 @@ target of the symlink differ."
 		      (if result
 			  (mapconcat 'identity (cons "" result) "/")
 			"/"))
-		(when (and is-dir
-			   (or (string= "" result)
-			       (not (string= (substring result -1) "/"))))
-		  (setq result (concat result "/"))))))
+		(when (string= "" result)
+		  (setq result "/")))))
 
 	  (tramp-message v 4 "True name of `%s' is `%s'" localname result)
 	  result))))
@@ -1268,96 +1270,108 @@ target of the symlink differ."
 		 res-inode res-filemodes res-numlinks
 		 res-uid res-gid res-size res-symlink-target)
     (tramp-message vec 5 "file attributes with ls: %s" localname)
-    (tramp-send-command
-     vec
-     (format "(%s %s || %s -h %s) && %s %s %s %s"
-	     (tramp-get-file-exists-command vec)
-	     (tramp-shell-quote-argument localname)
-	     (tramp-get-test-command vec)
-	     (tramp-shell-quote-argument localname)
-	     (tramp-get-ls-command vec)
-	     ;; On systems which have no quoting style, file names
-	     ;; with special characters could fail.
-	     (if (tramp-get-ls-command-with-quoting-style vec)
-		 "--quoting-style=c" "")
-	     (if (eq id-format 'integer) "-ildn" "-ild")
-	     (tramp-shell-quote-argument localname)))
-    ;; Parse `ls -l' output ...
-    (with-current-buffer (tramp-get-buffer vec)
-      (when (> (buffer-size) 0)
-        (goto-char (point-min))
-        ;; ... inode
-        (setq res-inode
-              (condition-case err
-                  (read (current-buffer))
-                (invalid-read-syntax
-                 (when (and (equal (cadr err)
-                                   "Integer constant overflow in reader")
-                            (string-match
-                             "^[0-9]+\\([0-9][0-9][0-9][0-9][0-9]\\)\\'"
-                             (car (cddr err))))
-                   (let* ((big (read (substring (car (cddr err)) 0
-                                                (match-beginning 1))))
-                          (small (read (match-string 1 (car (cddr err)))))
-                          (twiddle (/ small 65536)))
-                     (cons (+ big twiddle)
-                           (- small (* twiddle 65536))))))))
-        ;; ... file mode flags
-        (setq res-filemodes (symbol-name (read (current-buffer))))
-        ;; ... number links
-        (setq res-numlinks (read (current-buffer)))
-        ;; ... uid and gid
-        (setq res-uid (read (current-buffer)))
-        (setq res-gid (read (current-buffer)))
-        (if (eq id-format 'integer)
+    ;; We cannot send all three commands combined, it could exceed
+    ;; NAME_MAX or PATH_MAX.  Happened on Mac OS X, for example.
+    (when (or (tramp-send-command-and-check
+               vec
+               (format "%s %s"
+                       (tramp-get-file-exists-command vec)
+                       (tramp-shell-quote-argument localname)))
+              (tramp-send-command-and-check
+               vec
+               (format "%s -h %s"
+                       (tramp-get-test-command vec)
+                       (tramp-shell-quote-argument localname))))
+      (tramp-send-command
+       vec
+       (format "%s %s %s %s"
+               (tramp-get-ls-command vec)
+               (if (eq id-format 'integer) "-ildn" "-ild")
+               ;; On systems which have no quoting style, file names
+               ;; with special characters could fail.
+               (cond
+                ((tramp-get-ls-command-with-quoting-style vec)
+                 "--quoting-style=c")
+                ((tramp-get-ls-command-with-w-option vec)
+                 "-w")
+                (t ""))
+               (tramp-shell-quote-argument localname)))
+      ;; Parse `ls -l' output ...
+      (with-current-buffer (tramp-get-buffer vec)
+        (when (> (buffer-size) 0)
+          (goto-char (point-min))
+          ;; ... inode
+          (setq res-inode
+                (condition-case err
+                    (read (current-buffer))
+                  (invalid-read-syntax
+                   (when (and (equal (cadr err)
+                                     "Integer constant overflow in reader")
+                              (string-match
+                               "^[0-9]+\\([0-9][0-9][0-9][0-9][0-9]\\)\\'"
+                               (car (cddr err))))
+                     (let* ((big (read (substring (car (cddr err)) 0
+                                                  (match-beginning 1))))
+                            (small (read (match-string 1 (car (cddr err)))))
+                            (twiddle (/ small 65536)))
+                       (cons (+ big twiddle)
+                             (- small (* twiddle 65536))))))))
+          ;; ... file mode flags
+          (setq res-filemodes (symbol-name (read (current-buffer))))
+          ;; ... number links
+          (setq res-numlinks (read (current-buffer)))
+          ;; ... uid and gid
+          (setq res-uid (read (current-buffer)))
+          (setq res-gid (read (current-buffer)))
+          (if (eq id-format 'integer)
+              (progn
+                (unless (numberp res-uid) (setq res-uid -1))
+                (unless (numberp res-gid) (setq res-gid -1)))
             (progn
-              (unless (numberp res-uid) (setq res-uid -1))
-              (unless (numberp res-gid) (setq res-gid -1)))
-          (progn
-            (unless (stringp res-uid) (setq res-uid (symbol-name res-uid)))
-            (unless (stringp res-gid) (setq res-gid (symbol-name res-gid)))))
-        ;; ... size
-        (setq res-size (read (current-buffer)))
-        ;; From the file modes, figure out other stuff.
-        (setq symlinkp (eq ?l (aref res-filemodes 0)))
-        (setq dirp (eq ?d (aref res-filemodes 0)))
-        ;; If symlink, find out file name pointed to.
-        (when symlinkp
-          (search-forward "-> ")
-          (setq res-symlink-target
-		(if (tramp-get-ls-command-with-quoting-style vec)
-		    (read (current-buffer))
-		  (buffer-substring (point) (point-at-eol)))))
-        ;; Return data gathered.
-        (list
-         ;; 0. t for directory, string (name linked to) for symbolic
-         ;; link, or nil.
-         (or dirp res-symlink-target)
-         ;; 1. Number of links to file.
-         res-numlinks
-         ;; 2. File uid.
-         res-uid
-         ;; 3. File gid.
-         res-gid
-         ;; 4. Last access time, as a list of integers.  Normally this
-         ;; would be in the same format as `current-time', but the
-         ;; subseconds part is not currently implemented, and (0 0)
-         ;; denotes an unknown time.
-         ;; 5. Last modification time, likewise.
-         ;; 6. Last status change time, likewise.
-         '(0 0) '(0 0) '(0 0)		;CCC how to find out?
-         ;; 7. Size in bytes (-1, if number is out of range).
-         res-size
-         ;; 8. File modes, as a string of ten letters or dashes as in ls -l.
-         res-filemodes
-         ;; 9. t if file's gid would change if file were deleted and
-         ;; recreated.  Will be set in `tramp-convert-file-attributes'.
-         t
-         ;; 10. Inode number.
-         res-inode
-         ;; 11. Device number.  Will be replaced by a virtual device number.
-         -1
-         )))))
+              (unless (stringp res-uid) (setq res-uid (symbol-name res-uid)))
+              (unless (stringp res-gid) (setq res-gid (symbol-name res-gid)))))
+          ;; ... size
+          (setq res-size (read (current-buffer)))
+          ;; From the file modes, figure out other stuff.
+          (setq symlinkp (eq ?l (aref res-filemodes 0)))
+          (setq dirp (eq ?d (aref res-filemodes 0)))
+          ;; If symlink, find out file name pointed to.
+          (when symlinkp
+            (search-forward "-> ")
+            (setq res-symlink-target
+                  (if (tramp-get-ls-command-with-quoting-style vec)
+                      (read (current-buffer))
+                    (buffer-substring (point) (point-at-eol)))))
+          ;; Return data gathered.
+          (list
+           ;; 0. t for directory, string (name linked to) for symbolic
+           ;; link, or nil.
+           (or dirp res-symlink-target)
+           ;; 1. Number of links to file.
+           res-numlinks
+           ;; 2. File uid.
+           res-uid
+           ;; 3. File gid.
+           res-gid
+           ;; 4. Last access time, as a list of integers.  Normally
+           ;; this would be in the same format as `current-time', but
+           ;; the subseconds part is not currently implemented, and (0
+           ;; 0) denotes an unknown time.
+           ;; 5. Last modification time, likewise.
+           ;; 6. Last status change time, likewise.
+           '(0 0) '(0 0) '(0 0)		;CCC how to find out?
+           ;; 7. Size in bytes (-1, if number is out of range).
+           res-size
+           ;; 8. File modes, as a string of ten letters or dashes as in ls -l.
+           res-filemodes
+           ;; 9. t if file's gid would change if file were deleted and
+           ;; recreated.  Will be set in `tramp-convert-file-attributes'.
+           t
+           ;; 10. Inode number.
+           res-inode
+           ;; 11. Device number.  Will be replaced by a virtual device number.
+           -1
+           ))))))
 
 (defun tramp-do-file-attributes-with-perl
   (vec localname &optional id-format)
@@ -1510,7 +1524,7 @@ of."
 			  (current-time)
 			time))
 		;; With GNU Emacs, `format-time-string' has an
-		;; optional parameter UNIVERSAL.  This is preferred,
+		;; optional parameter ZONE.  This is preferred,
 		;; because we could handle the case when the remote
 		;; host is located in a different time zone as the
 		;; local host.
@@ -1837,10 +1851,14 @@ be non-negative integers."
      "-- 2>/dev/null | sed -e 's/\"/\\\\\"/g' -e 's/%s/\"/g'); echo \")\"")
     (tramp-shell-quote-argument localname)
     (tramp-get-ls-command vec)
-    ;; On systems which have no quoting style, file names with
-    ;; special characters could fail.
-    (if (tramp-get-ls-command-with-quoting-style vec)
-	"--quoting-style=shell" "")
+    ;; On systems which have no quoting style, file names with special
+    ;; characters could fail.
+    (cond
+     ((tramp-get-ls-command-with-quoting-style vec)
+      "--quoting-style=shell")
+     ((tramp-get-ls-command-with-w-option vec)
+      "-w")
+     (t ""))
     (tramp-get-remote-stat vec)
     tramp-stat-marker tramp-stat-marker
     tramp-stat-marker tramp-stat-marker
@@ -2846,7 +2864,7 @@ This is like `dired-recursive-delete-directory' for Tramp files."
 	  (narrow-to-region (point) (point))
 	  ;; We cannot use `insert-buffer-substring' because the Tramp
 	  ;; buffer changes its contents before insertion due to calling
-	  ;; `expand-file' and alike.
+	  ;; `expand-file-name' and alike.
 	  (insert
 	   (with-current-buffer (tramp-get-buffer v)
 	     (buffer-string)))
@@ -4149,7 +4167,8 @@ seconds.  If not, it produces an error message with the given ERROR-ARGS."
   "Set up an interactive shell.
 Mainly sets the prompt and the echo correctly.  PROC is the shell
 process to set up.  VEC specifies the connection."
-  (let ((tramp-end-of-output tramp-initial-end-of-output))
+  (let ((tramp-end-of-output tramp-initial-end-of-output)
+	(case-fold-search t))
     (tramp-open-shell vec (tramp-get-method-parameter vec 'tramp-remote-shell))
 
     ;; Disable tab and echo expansion.
@@ -4174,44 +4193,6 @@ process to set up.  VEC specifies the connection."
    vec (format "PS1=%s PS2='' PS3='' PROMPT_COMMAND=''"
 	       (tramp-shell-quote-argument tramp-end-of-output)) t)
 
-  ;; Try to set up the coding system correctly.
-  ;; CCC this can't be the right way to do it.  Hm.
-  (tramp-message vec 5 "Determining coding system")
-  (with-current-buffer (process-buffer proc)
-    (if (featurep 'mule)
-	;; Use MULE to select the right EOL convention for communicating
-	;; with the process.
-	(let ((cs (or (and (memq 'utf-8 (coding-system-list))
-			   (string-match "utf8" (tramp-get-remote-locale vec))
-			   (cons 'utf-8 'utf-8))
-		      (tramp-compat-funcall 'process-coding-system proc)
-		      (cons 'undecided 'undecided)))
-	      cs-decode cs-encode)
-	  (when (symbolp cs) (setq cs (cons cs cs)))
-	  (setq cs-decode (car cs))
-	  (setq cs-encode (cdr cs))
-	  (unless cs-decode (setq cs-decode 'undecided))
-	  (unless cs-encode (setq cs-encode 'undecided))
-	  (setq cs-encode (tramp-compat-coding-system-change-eol-conversion
-			   cs-encode 'unix))
-	  (tramp-send-command vec "echo foo ; echo bar" t)
-	  (goto-char (point-min))
-	  (when (search-forward "\r" nil t)
-	    (setq cs-decode (tramp-compat-coding-system-change-eol-conversion
-			     cs-decode 'dos)))
-	  (tramp-compat-funcall
-	   'set-buffer-process-coding-system cs-decode cs-encode)
-	  (tramp-message
-	   vec 5 "Setting coding system to `%s' and `%s'" cs-decode cs-encode))
-      ;; Look for ^M and do something useful if found.
-      (when (search-forward "\r" nil t)
-	;; We have found a ^M but cannot frob the process coding system
-	;; because we're running on a non-MULE Emacs.  Let's try
-	;; stty, instead.
-	(tramp-send-command vec "stty -onlcr" t))))
-
-  (tramp-send-command vec "set +o vi +o emacs" t)
-
   ;; Check whether the output of "uname -sr" has been changed.  If
   ;; yes, this is a strong indication that we must expire all
   ;; connection properties.  We start again with
@@ -4230,6 +4211,52 @@ process to set up.  VEC specifies the connection."
       ;; We want to keep the password.
       (tramp-cleanup-connection vec t t)
       (throw 'uname-changed (tramp-maybe-open-connection vec))))
+
+  ;; Try to set up the coding system correctly.
+  ;; CCC this can't be the right way to do it.  Hm.
+  (tramp-message vec 5 "Determining coding system")
+  (with-current-buffer (process-buffer proc)
+    (if (featurep 'mule)
+	;; Use MULE to select the right EOL convention for communicating
+	;; with the process.
+	(let ((cs (or (and (memq 'utf-8 (coding-system-list))
+			   (string-match "utf-?8" (tramp-get-remote-locale vec))
+			   (cons 'utf-8 'utf-8))
+		      (tramp-compat-funcall 'process-coding-system proc)
+		      (cons 'undecided 'undecided)))
+	      cs-decode cs-encode)
+	  (when (symbolp cs) (setq cs (cons cs cs)))
+	  (setq cs-decode (or (car cs) 'undecided)
+                cs-encode (or (cdr cs) 'undecided))
+	  (setq cs-encode
+		(tramp-compat-coding-system-change-eol-conversion
+		 cs-encode
+		 (if (string-match
+		      "^Darwin" (tramp-get-connection-property vec "uname" ""))
+		     'mac 'unix)))
+	  (tramp-send-command vec "echo foo ; echo bar" t)
+	  (goto-char (point-min))
+	  (when (search-forward "\r" nil t)
+	    (setq cs-decode (tramp-compat-coding-system-change-eol-conversion
+			     cs-decode 'dos)))
+          ;; Special setting for Mac OS X.
+          (when (and (string-match
+                      "^Darwin" (tramp-get-connection-property vec "uname" ""))
+                     (memq 'utf-8-hfs (coding-system-list)))
+            (setq cs-decode 'utf-8-hfs
+                  cs-encode 'utf-8-hfs))
+          (tramp-compat-funcall
+	   'set-buffer-process-coding-system cs-decode cs-encode)
+	  (tramp-message
+	   vec 5 "Setting coding system to `%s' and `%s'" cs-decode cs-encode))
+      ;; Look for ^M and do something useful if found.
+      (when (search-forward "\r" nil t)
+	;; We have found a ^M but cannot frob the process coding system
+	;; because we're running on a non-MULE Emacs.  Let's try
+	;; stty, instead.
+	(tramp-send-command vec "stty -onlcr" t))))
+
+  (tramp-send-command vec "set +o vi +o emacs" t)
 
   ;; Check whether the remote host suffers from buggy
   ;; `send-process-string'.  This is known for FreeBSD (see comment in
@@ -4264,7 +4291,7 @@ process to set up.  VEC specifies the connection."
   (tramp-find-shell vec)
 
   ;; Disable unexpected output.
-  (tramp-send-command vec "mesg n; biff n" t)
+  (tramp-send-command vec "mesg n 2>/dev/null; biff n 2>/dev/null" t)
 
   ;; IRIX64 bash expands "!" even when in single quotes.  This
   ;; destroys our shell functions, we must disable it.  See
@@ -4276,6 +4303,10 @@ process to set up.  VEC specifies the connection."
   (when (string-match "BSD\\|Darwin"
 		      (tramp-get-connection-property vec "uname" ""))
     (tramp-send-command vec "stty -oxtabs" t))
+
+  ;; Set utf8 encoding.  Needed for Mac OS X, for example.  This is
+  ;; non-POSIX, so we must expect errors on some systems.
+  (tramp-send-command vec "stty iutf8 2>/dev/null" t)
 
   ;; Set `remote-tty' process property.
   (let ((tty (tramp-send-command-and-read vec "echo \\\"`tty`\\\"" 'noerror)))
@@ -4833,7 +4864,7 @@ connection if a previous connection has died for some reason."
 	      (when (and p (processp p))
 		(delete-process p))
 	      (setenv "TERM" tramp-terminal-type)
-	      (setenv "LC_ALL" "en_US.utf8")
+	      (setenv "LC_ALL" (tramp-get-local-locale vec))
 	      (if (stringp tramp-histfile-override)
 		  (setenv "HISTFILE" tramp-histfile-override)
 		(if tramp-histfile-override
@@ -4843,6 +4874,8 @@ connection if a previous connection has died for some reason."
 		      (setenv "HISTSIZE" "0"))))
 	      (setenv "PROMPT_COMMAND")
 	      (setenv "PS1" tramp-initial-end-of-output)
+              (unless (stringp tramp-encoding-shell)
+                (tramp-error vec 'file-error "`tramp-encoding-shell' not set"))
 	      (let* ((target-alist (tramp-compute-multi-hops vec))
 		     ;; We will apply `tramp-ssh-controlmaster-options'
 		     ;; only for the first hop.
@@ -5009,7 +5042,10 @@ connection if a previous connection has died for some reason."
 			target-alist (cdr target-alist)))
 
 		;; Make initial shell settings.
-		(tramp-open-connection-setup-interactive-shell p vec)))))
+		(tramp-open-connection-setup-interactive-shell p vec)
+
+		;; Mark it as connected.
+		(tramp-set-connection-property p "connected" t)))))
 
       ;; When the user did interrupt, we must cleanup.
       (quit
@@ -5295,21 +5331,26 @@ Return ATTR."
 	    ;; The login shell could return more than just the $PATH
 	    ;; string.  So we use `tramp-end-of-heredoc' as marker.
 	    (when elt2
-	      (tramp-send-command-and-read
-	       vec
-	       (format
-		"%s %s %s 'echo %s \\\"$PATH\\\"'"
-		(tramp-get-method-parameter vec 'tramp-remote-shell)
-		(mapconcat
-		 'identity
-		 (tramp-get-method-parameter vec 'tramp-remote-shell-login)
-		 " ")
-		(mapconcat
-		 'identity
-		 (tramp-get-method-parameter vec 'tramp-remote-shell-args)
-		 " ")
-		(tramp-shell-quote-argument tramp-end-of-heredoc))
-	       nil (regexp-quote tramp-end-of-heredoc)))))
+	      (or
+	       (tramp-send-command-and-read
+		vec
+		(format
+		 "%s %s %s 'echo %s \\\"$PATH\\\"'"
+		 (tramp-get-method-parameter vec 'tramp-remote-shell)
+		 (mapconcat
+		  'identity
+		  (tramp-get-method-parameter vec 'tramp-remote-shell-login)
+		  " ")
+		 (mapconcat
+		  'identity
+		  (tramp-get-method-parameter vec 'tramp-remote-shell-args)
+		  " ")
+		 (tramp-shell-quote-argument tramp-end-of-heredoc))
+		'noerror (regexp-quote tramp-end-of-heredoc))
+	       (progn
+		 (tramp-message
+		  vec 2 "Could not retrieve `tramp-own-remote-path'")
+		 nil)))))
 
       ;; Replace place holder `tramp-default-remote-path'.
       (when elt1
@@ -5353,7 +5394,7 @@ Return ATTR."
 (defun tramp-get-remote-locale (vec)
   (with-tramp-connection-property vec "locale"
     (tramp-send-command vec "locale -a")
-    (let ((candidates '("en_US.utf8" "C.utf8"))
+    (let ((candidates '("en_US.utf8" "C.utf8" "en_US.UTF-8"))
 	  locale)
       (with-current-buffer (tramp-get-connection-buffer vec)
 	(while candidates
@@ -5405,12 +5446,19 @@ Return ATTR."
   (save-match-data
     (with-tramp-connection-property vec "ls-quoting-style"
       (tramp-message vec 5 "Checking, whether `ls --quoting-style=shell' works")
-      ;; Some "ls" versions are sensible wrt the order of arguments,
-      ;; they fail when "-al" is after the "--dired" argument (for
-      ;; example on FreeBSD).
       (tramp-send-command-and-check
        vec (format "%s --quoting-style=shell -al /dev/null"
 		   (tramp-get-ls-command vec))))))
+
+(defun tramp-get-ls-command-with-w-option (vec)
+  (save-match-data
+    (with-tramp-connection-property vec "ls-w-option"
+      (tramp-message vec 5 "Checking, whether `ls -w' works")
+      ;; Option "-w" is available on BSD systems.  No argument is
+      ;; given, because this could return wrong results in case "ls"
+      ;; supports the "-w NUM" argument, as for busyboxes.
+      (tramp-send-command-and-check
+       vec (format "%s -alw" (tramp-get-ls-command vec))))))
 
 (defun tramp-get-test-command (vec)
   (with-tramp-connection-property vec "test"

@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1995, 1998-1999, 2001-2015 Free Software
+@c Copyright (C) 1990-1995, 1998-1999, 2001-2016 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Frames
@@ -557,7 +557,7 @@ The top left corner of the native frame specifies the @dfn{native
 position} of the frame.  (1)--(3) in the drawing above indicate that
 position for the various builds:
 
-@itemize @w
+@itemize @w{}
 @item (1) non-toolkit and terminal frames
 
 @item (2) Lucid, Motif and Windows frames
@@ -714,9 +714,12 @@ Sizes}) or splitting (@pxref{Splitting Windows}) windows.
 
 @cindex line height
 @cindex column width
-The term @dfn{line height} is sometimes used instead of ``default
-character height''.  Similarly, the term @dfn{column width} is used as
-shorthand for ``default character width''.
+@cindex canonical character height
+@cindex canonical character width
+The terms @dfn{line height} and @dfn{canonical character height} are
+sometimes used instead of ``default character height''.  Similarly, the
+terms @dfn{column width} and @dfn{canonical character width} are used
+instead of ``default character width''.
 
 @defun frame-char-height &optional frame
 @defunx frame-char-width &optional frame
@@ -844,7 +847,7 @@ With some window managers you may have to set this to non-@code{nil} in
 order to make a frame appear truly maximized or full-screen.
 @end defopt
 
-@defun set-frame-size frame width height pixelwise
+@defun set-frame-size frame width height &optional pixelwise
 This function sets the size of the text area of @var{frame}, measured in
 terms of the canonical height and width of a character on @var{frame}
 (@pxref{Frame Font}).
@@ -1001,18 +1004,40 @@ parameters of @var{frame} and their values.  If @var{frame} is
 @end defun
 
 @defun modify-frame-parameters frame alist
-This function alters the parameters of frame @var{frame} based on the
-elements of @var{alist}.  Each element of @var{alist} has the form
-@code{(@var{parm} . @var{value})}, where @var{parm} is a symbol naming a
-parameter.  If you don't mention a parameter in @var{alist}, its value
-doesn't change.  If @var{frame} is @code{nil}, it defaults to the selected
-frame.
+This function alters the frame @var{frame} based on the elements of
+@var{alist}.  Each element of @var{alist} has the form
+@code{(@var{parm} . @var{value})}, where @var{parm} is a symbol naming
+a parameter.  If you don't mention a parameter in @var{alist}, its
+value doesn't change.  If @var{frame} is @code{nil}, it defaults to
+the selected frame.
+
+Some parameters are only meaningful for frames on certain kinds of
+display (@pxref{Frames}).  If @var{alist} includes parameters that are
+not meaningful for the @var{frame}'s display, this function will
+change its value in the frame's parameter list, but will otherwise
+ignore it.
+
+When @var{alist} specifies more than one parameter whose value can
+affect the new size of @var{frame}, the final size of the frame may
+differ according to the toolkit used.  For example, specifying that a
+frame should from now on have a menu and/or tool bar instead of none and
+simultaneously specifying the new height of the frame will inevitably
+lead to a recalculation of the frame's height.  Conceptually, in such
+case, this function will try to have the explicit height specification
+prevail.  It cannot be excluded, however, that the addition (or removal)
+of the menu or tool bar, when eventually performed by the toolkit, will
+defeat this intention.
+
+Sometimes, binding @code{frame-inhibit-implied-resize} (@pxref{Implied
+Frame Resizing}) to a non-@code{nil} value around calls to this function
+may fix the problem sketched here.  Sometimes, however, exactly such
+binding may be hit by the problem.
 @end defun
 
 @defun set-frame-parameter frame parm value
 This function sets the frame parameter @var{parm} to the specified
-@var{value}.  If @var{frame} is @code{nil}, it defaults to the
-selected frame.
+@var{value}.  If @var{frame} is @code{nil}, it defaults to the selected
+frame.
 @end defun
 
 @defun modify-all-frames-parameters alist
@@ -1166,8 +1191,8 @@ named, this parameter will be @code{nil}.
 @cindex window position on display
 @cindex frame position
 
-  Position parameters' values are normally measured in pixels, but on
-text terminals they count characters or lines instead.
+  Position parameters' values are measured in pixels.  (Note that none
+of these parameters exist on TTY frames.)
 
 @table @code
 @vindex left, a frame parameter
@@ -2211,7 +2236,7 @@ parameters.  @xref{Management Parameters}.
 terminal frames.  On each text terminal, only the top frame is
 displayed at any one time.
 
-@defun tty-top-frame terminal
+@defun tty-top-frame &optional terminal
 This function returns the top frame on @var{terminal}.  @var{terminal}
 should be a terminal object, a frame (meaning that frame's terminal),
 or @code{nil} (meaning the selected frame's terminal).  If it does not
@@ -2381,8 +2406,8 @@ The resulting mouse position is not constrained to the native frame of
 The return value is not significant.
 @end defun
 
-On a graphical terminal the following two functions allow to retrieve
-and set the absolute position of the mouse cursor.
+On a graphical terminal the following two functions allow the absolute
+position of the mouse cursor to be retrieved and set.
 
 @defun mouse-absolute-pixel-position
 This function returns a cons cell (@var{x} . @var{y}) of the coordinates
@@ -2404,7 +2429,7 @@ This predicate function returns non-@code{nil} if the mouse pointer
 displayed on @var{frame} is visible; otherwise it returns @code{nil}.
 @var{frame} omitted or @code{nil} means the selected frame.  This is
 useful when @code{make-pointer-invisible} is set to @code{t}: it
-allows to know if the pointer has been hidden.
+allows you to know if the pointer has been hidden.
 @xref{Mouse Avoidance,,,emacs, The Emacs Manual}.
 @end defun
 
@@ -2615,18 +2640,19 @@ defined in the file @file{lisp/term/x-win.el}.  Use @kbd{M-x apropos
 @cindex primary selection
 @cindex secondary selection
 
-  In the X window system, data can be transferred between different
-applications by means of @dfn{selections}.  X defines an arbitrary
-number of @dfn{selection types}, each of which can store its own data;
-however, only three are commonly used: the @dfn{clipboard},
-@dfn{primary selection}, and @dfn{secondary selection}.  @xref{Cut and
-Paste,, Cut and Paste, emacs, The GNU Emacs Manual}, for Emacs
-commands that make use of these selections.  This section documents
-the low-level functions for reading and setting X selections.
+  In window systems, such as X, data can be transferred between
+different applications by means of @dfn{selections}.  X defines an
+arbitrary number of @dfn{selection types}, each of which can store its
+own data; however, only three are commonly used: the @dfn{clipboard},
+@dfn{primary selection}, and @dfn{secondary selection}.  Other window
+systems support only the clipboard.  @xref{Cut and Paste,, Cut and
+Paste, emacs, The GNU Emacs Manual}, for Emacs commands that make use
+of these selections.  This section documents the low-level functions
+for reading and setting window-system selections.
 
-@deffn Command x-set-selection type data
-This function sets an X selection.  It takes two arguments: a
-selection type @var{type}, and the value to assign to it, @var{data}.
+@deffn Command gui-set-selection type data
+This function sets a window-system selection.  It takes two arguments:
+a selection type @var{type}, and the value to assign to it, @var{data}.
 
 @var{type} should be a symbol; it is usually one of @code{PRIMARY},
 @code{SECONDARY} or @code{CLIPBOARD}.  These are symbols with
@@ -2643,14 +2669,14 @@ stands for text in the overlay or between the markers.  The argument
 This function returns @var{data}.
 @end deffn
 
-@defun x-get-selection &optional type data-type
-This function accesses selections set up by Emacs or by other X
-clients.  It takes two optional arguments, @var{type} and
+@defun gui-get-selection &optional type data-type
+This function accesses selections set up by Emacs or by other
+programs.  It takes two optional arguments, @var{type} and
 @var{data-type}.  The default for @var{type}, the selection type, is
 @code{PRIMARY}.
 
 The @var{data-type} argument specifies the form of data conversion to
-use, to convert the raw data obtained from another X client into Lisp
+use, to convert the raw data obtained from another program into Lisp
 data.  Meaningful values include @code{TEXT}, @code{STRING},
 @code{UTF8_STRING}, @code{TARGETS}, @code{LENGTH}, @code{DELETE},
 @code{FILE_NAME}, @code{CHARACTER_POSITION}, @code{NAME},
@@ -2658,7 +2684,8 @@ data.  Meaningful values include @code{TEXT}, @code{STRING},
 @code{HOST_NAME}, @code{USER}, @code{CLASS}, @code{ATOM}, and
 @code{INTEGER}.  (These are symbols with upper-case names in accord
 with X conventions.)  The default for @var{data-type} is
-@code{STRING}.
+@code{STRING}.  Window systems other than X usually support only a
+small subset of these types, in addition to @code{STRING}.
 @end defun
 
 @defopt selection-coding-system
@@ -2670,10 +2697,15 @@ converts to the text representation that X11 normally uses.
 
 @cindex clipboard support (for MS-Windows)
 When Emacs runs on MS-Windows, it does not implement X selections in
-general, but it does support the clipboard.  @code{x-get-selection}
-and @code{x-set-selection} on MS-Windows support the text data type
+general, but it does support the clipboard.  @code{gui-get-selection}
+and @code{gui-set-selection} on MS-Windows support the text data type
 only; if the clipboard holds other types of data, Emacs treats the
-clipboard as empty.
+clipboard as empty.  The supported data type is @code{STRING}.
+
+For backward compatibility, there are obsolete aliases
+@code{x-get-selection} and @code{x-set-selection}, which were the
+names of @code{gui-get-selection} and @code{gui-set-selection} before
+Emacs 25.1.
 
 @node Drag and Drop
 @section Drag and Drop

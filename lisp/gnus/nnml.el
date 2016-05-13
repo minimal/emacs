@@ -1,6 +1,6 @@
 ;;; nnml.el --- mail spool access for Gnus
 
-;; Copyright (C) 1995-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1995-2016 Free Software Foundation, Inc.
 
 ;; Authors: Didier Verna <didier@xemacs.org> (adding compaction)
 ;;	Simon Josefsson <simon@josefsson.org>
@@ -267,23 +267,6 @@ non-nil.")
 	  (nnheader-insert "211 %d %d %d %s\n"
 			   (max (1+ (- (cdr active) (car active))) 0)
 			   (car active) (cdr active) group)))))))
-
-(deffoo nnml-retrieve-groups (groups &optional server)
-  (when nnml-get-new-mail
-    (if (nnmail-get-new-mail-per-group)
-	(dolist (group groups)
-	  (nnml-request-scan group server))
-      (nnml-request-scan nil server)))
-  (with-current-buffer nntp-server-buffer
-    (erase-buffer)
-    (dolist (group groups)
-      (let* ((entry (assoc group nnml-group-alist))
-	     (active (nth 1 entry)))
-	(if (consp active)
-	    (insert (format "211 %d %d %d %s\n"
-			    (max (1+ (- (cdr active) (car active))) 0)
-			    (car active) (cdr active) group))))))
-  'group)
 
 (deffoo nnml-request-scan (&optional group server)
   (setq nnml-article-file-alist nil)

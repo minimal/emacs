@@ -1,6 +1,6 @@
 ;;; gnus-srvr.el --- virtual server support for Gnus
 
-;; Copyright (C) 1995-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1995-2016 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -389,7 +389,7 @@ The following commands are available:
       (when entry
 	(gnus-dribble-enter
 	 (concat "(gnus-server-set-info \"" server "\" '"
-		 (gnus-prin1-to-string (cdr entry)) ")\n")
+		 (gnus-prin1-to-string (cdr entry)) ")")
 	 (concat "^(gnus-server-set-info \"" (regexp-quote server) "\"")))
       (when (or entry oentry)
 	;; Buffer may be narrowed.

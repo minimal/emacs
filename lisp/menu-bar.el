@@ -1,6 +1,6 @@
 ;;; menu-bar.el --- define a default menu bar
 
-;; Copyright (C) 1993-1995, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1995, 2000-2016 Free Software Foundation, Inc.
 
 ;; Author: Richard M. Stallman
 ;; Maintainer: emacs-devel@gnu.org
@@ -218,7 +218,7 @@
   (cond
    ((and (eq menu-bar-last-search-type 'string)
 	 search-ring)
-    (search-forward (car search-ring)))
+    (nonincremental-search-forward))
    ((and (eq menu-bar-last-search-type 'regexp)
 	 regexp-search-ring)
     (re-search-forward (car regexp-search-ring)))
@@ -231,30 +231,30 @@
   (cond
    ((and (eq menu-bar-last-search-type 'string)
 	 search-ring)
-    (search-backward (car search-ring)))
+    (nonincremental-search-backward))
    ((and (eq menu-bar-last-search-type 'regexp)
 	 regexp-search-ring)
     (re-search-backward (car regexp-search-ring)))
    (t
     (error "No previous search"))))
 
-(defun nonincremental-search-forward (string)
+(defun nonincremental-search-forward (&optional string backward)
   "Read a string and search for it nonincrementally."
   (interactive "sSearch for string: ")
   (setq menu-bar-last-search-type 'string)
-  (if (equal string "")
-      (search-forward (car search-ring))
-    (isearch-update-ring string nil)
-    (search-forward string)))
+  ;; Ideally, this whole command would be equivalent to `C-s RET'.
+  (let ((isearch-forward (not backward))
+        (isearch-regexp-function search-default-mode)
+        (isearch-regexp nil))
+    (if (or (equal string "") (not string))
+        (funcall (isearch-search-fun-default) (car search-ring))
+      (isearch-update-ring string nil)
+      (funcall (isearch-search-fun-default) string))))
 
-(defun nonincremental-search-backward (string)
+(defun nonincremental-search-backward (&optional string)
   "Read a string and search backward for it nonincrementally."
-  (interactive "sSearch for string: ")
-  (setq menu-bar-last-search-type 'string)
-  (if (equal string "")
-      (search-backward (car search-ring))
-    (isearch-update-ring string nil)
-    (search-backward string)))
+  (interactive "sSearch backwards for string: ")
+  (nonincremental-search-forward string 'backward))
 
 (defun nonincremental-re-search-forward (string)
   "Read a regular expression and search for it nonincrementally."
@@ -413,8 +413,8 @@
     menu))
 
 (defun menu-bar-goto-uses-etags-p ()
-  (or (not (boundp 'xref-find-function))
-      (eq xref-find-function 'etags-xref-find)))
+  (or (not (boundp 'xref-backend-functions))
+      (eq (car xref-backend-functions) 'etags--xref-backend)))
 
 (defvar yank-menu (cons (purecopy "Select Yank") nil))
 (fset 'yank-menu (cons 'keymap yank-menu))
@@ -1250,6 +1250,52 @@ mail status in mode line"))
                   :enable (not (truncated-partial-width-window-p))))
     menu))
 
+(defvar menu-bar-search-options-menu
+  (let ((menu (make-sparse-keymap "Search Options")))
+
+    (dolist (x '((character-fold-to-regexp "Fold Characters" "Character folding")
+                 (isearch-symbol-regexp "Whole Symbols" "Whole symbol")
+                 (word-search-regexp "Whole Words" "Whole word")))
+      (bindings--define-key menu (vector (nth 0 x))
+        `(menu-item ,(nth 1 x)
+                    (lambda ()
+                      (interactive)
+                      (setq search-default-mode #',(nth 0 x))
+                      (message ,(format "%s search enabled" (nth 2 x))))
+                    :help ,(format "Enable %s search" (downcase (nth 2 x)))
+                    :button (:radio . (eq search-default-mode #',(nth 0 x))))))
+
+    (bindings--define-key menu [regexp-search]
+      '(menu-item "Regular Expression"
+                  (lambda ()
+                    (interactive)
+                    (setq search-default-mode t)
+                    (message "Regular-expression search enabled"))
+                  :help "Enable regular-expression search"
+                  :button (:radio . (eq search-default-mode t))))
+
+    (bindings--define-key menu [regular-search]
+      '(menu-item "Literal Search"
+                  (lambda ()
+                    (interactive)
+                    (when search-default-mode
+                      (setq search-default-mode nil)
+                      (when (symbolp search-default-mode)
+                        (message "Literal search enabled"))))
+                  :help "Disable special search modes"
+                  :button (:radio . (not search-default-mode))))
+
+    (bindings--define-key menu [custom-separator]
+      menu-bar-separator)
+    (bindings--define-key menu [case-fold-search]
+      (menu-bar-make-toggle
+       toggle-case-fold-search case-fold-search
+       "Ignore Case"
+       "Case-Insensitive Search %s"
+       "Ignore letter-case in search commands"))
+
+    menu))
+
 (defvar menu-bar-options-menu
   (let ((menu (make-sparse-keymap "Options")))
     (bindings--define-key menu [customize]
@@ -1361,12 +1407,9 @@ mail status in mode line"))
        (:visible (and (boundp 'cua-enable-cua-keys)
 		      (not cua-enable-cua-keys)))))
 
-    (bindings--define-key menu [case-fold-search]
-      (menu-bar-make-toggle
-       toggle-case-fold-search case-fold-search
-       "Ignore Case for Search"
-       "Case-Insensitive Search %s"
-       "Ignore letter-case in search commands"))
+    (bindings--define-key menu [search-options]
+      `(menu-item "Default Search Options"
+		  ,menu-bar-search-options-menu))
 
     (bindings--define-key menu [line-wrapping]
       `(menu-item "Line Wrapping in This Buffer"

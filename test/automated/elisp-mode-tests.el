@@ -1,6 +1,6 @@
-d;;; elisp-mode-tests.el --- Tests for emacs-lisp-mode  -*- lexical-binding: t; -*-
+;;; elisp-mode-tests.el --- Tests for emacs-lisp-mode  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2015 Free Software Foundation, Inc.
+;; Copyright (C) 2015-2016 Free Software Foundation, Inc.
 
 ;; Author: Dmitry Gutov <dgutov@yandex.ru>
 ;; Author: Stephen Leake <stephen_leake@member.fsf.org>
@@ -208,8 +208,9 @@ to (xref-elisp-test-descr-to-target xref)."
   (declare (indent defun)
            (debug (symbolp "name")))
   `(ert-deftest ,(intern (concat "xref-elisp-test-" (symbol-name name))) ()
-     (xref-elisp-test-run ,computed-xrefs ,expected-xrefs)
-     ))
+     (let ((find-file-suppress-same-file-warnings t))
+       (xref-elisp-test-run ,computed-xrefs ,expected-xrefs)
+       )))
 
 ;; When tests are run from the Makefile, 'default-directory' is $HOME,
 ;; so we must provide this dir to expand-file-name in the expected
@@ -542,7 +543,7 @@ to (xref-elisp-test-descr-to-target xref)."
 ;; FIXME: deftype
 
 (xref-elisp-deftest find-defs-defun-c-defvar-c
-  (elisp-xref-find 'definitions "system-name")
+  (xref-backend-definitions 'elisp "system-name")
   (list
    (xref-make "(defvar system-name)"
 	      (xref-make-elisp-location 'system-name 'defvar "src/editfns.c"))
@@ -551,7 +552,7 @@ to (xref-elisp-test-descr-to-target xref)."
   )
 
 (xref-elisp-deftest find-defs-defun-el-defvar-c
-  (elisp-xref-find 'definitions "abbrev-mode")
+  (xref-backend-definitions 'elisp "abbrev-mode")
   ;; It's a minor mode, but the variable is defined in buffer.c
   (list
    (xref-make "(defvar abbrev-mode)"

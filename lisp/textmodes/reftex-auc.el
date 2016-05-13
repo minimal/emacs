@@ -1,6 +1,6 @@
 ;;; reftex-auc.el --- RefTeX's interface to AUCTeX
 
-;; Copyright (C) 1997-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2016 Free Software Foundation, Inc.
 
 ;; Author: Carsten Dominik <dominik@science.uva.nl>
 ;; Maintainer: auctex-devel@gnu.org
@@ -137,7 +137,7 @@ argument identify one of multiple indices."
        ((stringp tag) tag)
        ((integerp tag)
         (save-excursion
-          (goto-char (match-end 1))
+          (goto-char (match-end 0))
           (or (reftex-nth-arg tag (nth 6 entry)) "idx")))
        (t "idx")))))
 

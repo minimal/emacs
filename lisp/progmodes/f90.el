@@ -1,6 +1,6 @@
 ;;; f90.el --- Fortran-90 mode (free format)  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1995-1997, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1995-1997, 2000-2016 Free Software Foundation, Inc.
 
 ;; Author: Torbjörn Einarsson <Torbjorn.Einarsson@era.ericsson.se>
 ;; Maintainer: Glenn Morris <rgm@gnu.org>
@@ -295,7 +295,7 @@ the constant `f90-no-break-re' ensures that such tokens are not split."
 
 (defcustom f90-auto-keyword-case nil
   "Automatic case conversion of keywords.
-The options are 'downcase-word, 'upcase-word, 'capitalize-word and nil."
+The options are `downcase-word', `upcase-word', `capitalize-word' and nil."
   :type  '(choice (const downcase-word) (const upcase-word)
                   (const capitalize-word) (const nil))
   :safe (lambda (value) (memq value '(downcase-word
@@ -2330,7 +2330,7 @@ Any other key combination is executed normally."
 ;; Change the keywords according to argument.
 (defun f90-change-keywords (change-word &optional beg end)
   "Change the case of F90 keywords in the region (if specified) or buffer.
-CHANGE-WORD should be one of 'upcase-word, 'downcase-word, 'capitalize-word."
+CHANGE-WORD should be one of `upcase-word', `downcase-word', `capitalize-word'."
   (save-excursion
     (setq beg (or beg (point-min))
           end (or end (point-max)))
@@ -2355,7 +2355,8 @@ CHANGE-WORD should be one of 'upcase-word, 'downcase-word, 'capitalize-word."
               (setq ref-point (point)
                     ;; FIXME this does not work for constructs with
                     ;; embedded space, eg "sync all".
-                    back-point (save-excursion (backward-word 1) (point))
+                    back-point (save-excursion (backward-word-strictly 1)
+                                               (point))
                     saveword (buffer-substring back-point ref-point))
               (funcall change-word -1)
               (or (string= saveword (buffer-substring back-point ref-point))

@@ -1,5 +1,5 @@
 /* Heap management routines for GNU Emacs on the Microsoft Windows API.
-   Copyright (C) 1994, 2001-2015 Free Software Foundation, Inc.
+   Copyright (C) 1994, 2001-2016 Free Software Foundation, Inc.
 
    This file is part of GNU Emacs.
 
@@ -73,12 +73,11 @@ typedef PVOID (WINAPI * RtlCreateHeap_Proc) (
 
 typedef LONG NTSTATUS;
 
-typedef NTSTATUS
-(NTAPI * PRTL_HEAP_COMMIT_ROUTINE)(
-                                   IN PVOID Base,
-                                   IN OUT PVOID *CommitAddress,
-                                   IN OUT PSIZE_T CommitSize
-                                   );
+typedef NTSTATUS (NTAPI *PRTL_HEAP_COMMIT_ROUTINE) (
+						    IN PVOID Base,
+						    IN OUT PVOID *CommitAddress,
+						    IN OUT PSIZE_T CommitSize
+						    );
 
 typedef struct _RTL_HEAP_PARAMETERS {
   ULONG Length;
@@ -100,8 +99,8 @@ typedef struct _RTL_HEAP_PARAMETERS {
    special segment to the executable.  In order to be able to do this
    without losing too much space, we need to create a Windows heap at
    the specific address of the static array.  The RtlCreateHeap
-   available inside the NT kernel since XP will do this.  It allows to
-   create a non-growable heap at a specific address.  So before
+   available inside the NT kernel since XP will do this.  It allows the
+   creation of a non-growable heap at a specific address.  So before
    dumping, we create a non-growable heap at the address of the
    dumped_data[] array.  After dumping, we reuse memory allocated
    there without being able to free it (but most of it is not meant to
@@ -258,9 +257,18 @@ init_heap (void)
 	}
 #endif
 
-      the_malloc_fn = malloc_after_dump;
-      the_realloc_fn = realloc_after_dump;
-      the_free_fn = free_after_dump;
+      if (os_subtype == OS_9X)
+        {
+          the_malloc_fn = malloc_after_dump_9x;
+          the_realloc_fn = realloc_after_dump_9x;
+          the_free_fn = free_after_dump_9x;
+        }
+      else
+        {
+          the_malloc_fn = malloc_after_dump;
+          the_realloc_fn = realloc_after_dump;
+          the_free_fn = free_after_dump;
+        }
     }
   else
     {
@@ -291,9 +299,18 @@ init_heap (void)
 	  exit (-1);
 	}
       heap = s_pfn_Rtl_Create_Heap (0, data_region_base, 0, 0, NULL, &params);
-      the_malloc_fn = malloc_before_dump;
-      the_realloc_fn = realloc_before_dump;
-      the_free_fn = free_before_dump;
+
+      if (os_subtype == OS_9X)
+        {
+          fprintf (stderr, "Cannot dump Emacs on Windows 9X; exiting.\n");
+          exit (-1);
+        }
+      else
+        {
+          the_malloc_fn = malloc_before_dump;
+          the_realloc_fn = realloc_before_dump;
+          the_free_fn = free_before_dump;
+        }
     }
 
   /* Update system version information to match current system.  */
@@ -504,6 +521,65 @@ free_before_dump (void *ptr)
     }
 }
 
+/* On Windows 9X, HeapAlloc may return pointers that are not aligned
+   on 8-byte boundary, alignment which is required by the Lisp memory
+   management.  To circumvent this problem, manually enforce alignment
+   on Windows 9X.  */
+
+void *
+malloc_after_dump_9x (size_t size)
+{
+  void *p = malloc_after_dump (size + 8);
+  void *pa;
+  if (p == NULL)
+    return p;
+  pa = (void*)(((intptr_t)p + 8) & ~7);
+  *((void**)pa-1) = p;
+  return pa;
+}
+
+void *
+realloc_after_dump_9x (void *ptr, size_t size)
+{
+  if (FREEABLE_P (ptr))
+    {
+      void *po = *((void**)ptr-1);
+      void *p;
+      void *pa;
+      p = realloc_after_dump (po, size + 8);
+      if (p == NULL)
+        return p;
+      pa = (void*)(((intptr_t)p + 8) & ~7);
+      if (ptr != NULL &&
+          (char*)pa - (char*)p != (char*)ptr - (char*)po)
+        {
+          /* Handle the case where alignment in pre-realloc and
+             post-realloc blocks does not match.  */
+          MoveMemory (pa, (void*)((char*)p + ((char*)ptr - (char*)po)), size);
+        }
+      *((void**)pa-1) = p;
+      return pa;
+    }
+  else
+    {
+      /* Non-freeable pointers have no alignment-enforcing header
+         (since dumping is not allowed on Windows 9X).  */
+      void* p = malloc_after_dump_9x (size);
+      if (p != NULL)
+	CopyMemory (p, ptr, size);
+      return p;
+    }
+}
+
+void
+free_after_dump_9x (void *ptr)
+{
+  if (FREEABLE_P (ptr))
+    {
+      free_after_dump (*((void**)ptr-1));
+    }
+}
+
 #ifdef ENABLE_CHECKING
 void
 report_temacs_memory_usage (void)
@@ -564,26 +640,32 @@ mmap_alloc (void **var, size_t nbytes)
      advance, and the buffer is enlarged several times as the data is
      decompressed on the fly.  */
   if (nbytes < MAX_BUFFER_SIZE)
-    p = VirtualAlloc (NULL, (nbytes * 2), MEM_RESERVE, PAGE_READWRITE);
+    p = VirtualAlloc (NULL, ROUND_UP (nbytes * 2, get_allocation_unit ()),
+		      MEM_RESERVE, PAGE_READWRITE);
 
   /* If it fails, or if the request is above 512MB, try with the
      requested size.  */
   if (p == NULL)
-    p = VirtualAlloc (NULL, nbytes, MEM_RESERVE, PAGE_READWRITE);
+    p = VirtualAlloc (NULL, ROUND_UP (nbytes, get_allocation_unit ()),
+		      MEM_RESERVE, PAGE_READWRITE);
 
   if (p != NULL)
     {
       /* Now, commit pages for NBYTES.  */
       *var = VirtualAlloc (p, nbytes, MEM_COMMIT, PAGE_READWRITE);
+      if (*var == NULL)
+	p = *var;
     }
 
   if (!p)
     {
-      if (GetLastError () == ERROR_NOT_ENOUGH_MEMORY)
+      DWORD e = GetLastError ();
+
+      if (e == ERROR_NOT_ENOUGH_MEMORY)
 	errno = ENOMEM;
       else
 	{
-	  DebPrint (("mmap_alloc: error %ld\n", GetLastError ()));
+	  DebPrint (("mmap_alloc: error %ld\n", e));
 	  errno = EINVAL;
 	}
     }
@@ -606,6 +688,7 @@ void *
 mmap_realloc (void **var, size_t nbytes)
 {
   MEMORY_BASIC_INFORMATION memInfo, m2;
+  void *old_ptr;
 
   if (*var == NULL)
     return mmap_alloc (var, nbytes);
@@ -617,52 +700,54 @@ mmap_realloc (void **var, size_t nbytes)
       return mmap_alloc (var, nbytes);
     }
 
+  memset (&memInfo, 0, sizeof (memInfo));
   if (VirtualQuery (*var, &memInfo, sizeof (memInfo)) == 0)
     DebPrint (("mmap_realloc: VirtualQuery error = %ld\n", GetLastError ()));
 
   /* We need to enlarge the block.  */
   if (memInfo.RegionSize < nbytes)
     {
+      memset (&m2, 0, sizeof (m2));
       if (VirtualQuery (*var + memInfo.RegionSize, &m2, sizeof(m2)) == 0)
         DebPrint (("mmap_realloc: VirtualQuery error = %ld\n",
 		   GetLastError ()));
       /* If there is enough room in the current reserved area, then
 	 commit more pages as needed.  */
       if (m2.State == MEM_RESERVE
+	  && m2.AllocationBase == memInfo.AllocationBase
 	  && nbytes <= memInfo.RegionSize + m2.RegionSize)
 	{
 	  void *p;
 
-	  p = VirtualAlloc (*var + memInfo.RegionSize,
-			    nbytes - memInfo.RegionSize,
-			    MEM_COMMIT, PAGE_READWRITE);
+	  p = VirtualAlloc (*var, nbytes, MEM_COMMIT, PAGE_READWRITE);
 	  if (!p /* && GetLastError() != ERROR_NOT_ENOUGH_MEMORY */)
 	    {
-	      DebPrint (("realloc enlarge: VirtualAlloc error %ld\n",
+	      DebPrint (("realloc enlarge: VirtualAlloc (%p + %I64x, %I64x) error %ld\n",
+			 *var, (uint64_t)memInfo.RegionSize,
+			 (uint64_t)(nbytes - memInfo.RegionSize),
 			 GetLastError ()));
-	      errno = ENOMEM;
+	      DebPrint (("next region: %p %p %I64x %x\n", m2.BaseAddress,
+			 m2.AllocationBase, (uint64_t)m2.RegionSize,
+			 m2.AllocationProtect));
 	    }
+	  else
+	    return *var;
+	}
+      /* Else we must actually enlarge the block by allocating a new
+	 one and copying previous contents from the old to the new one.  */
+      old_ptr = *var;
+
+      if (mmap_alloc (var, nbytes))
+	{
+	  CopyMemory (*var, old_ptr, memInfo.RegionSize);
+	  mmap_free (&old_ptr);
 	  return *var;
 	}
       else
 	{
-	  /* Else we must actually enlarge the block by allocating a
-	     new one and copying previous contents from the old to the
-	     new one.  */
-	  void *old_ptr = *var;
-
-	  if (mmap_alloc (var, nbytes))
-	    {
-	      CopyMemory (*var, old_ptr, memInfo.RegionSize);
-	      mmap_free (&old_ptr);
-	      return *var;
-	    }
-	  else
-	    {
-	      /* We failed to enlarge the buffer.  */
-	      *var = old_ptr;
-	      return NULL;
-	    }
+	  /* We failed to reallocate the buffer.  */
+	  *var = old_ptr;
+	  return NULL;
 	}
     }
 
@@ -674,7 +759,7 @@ mmap_realloc (void **var, size_t nbytes)
         {
           /* Let's give some memory back to the system and release
 	     some pages.  */
-          void *old_ptr = *var;
+          old_ptr = *var;
 
 	  if (mmap_alloc (var, nbytes))
             {

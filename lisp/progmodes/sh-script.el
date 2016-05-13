@@ -1,6 +1,7 @@
 ;;; sh-script.el --- shell-script editing commands for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1993-1997, 1999, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1997, 1999, 2001-2016 Free Software Foundation,
+;; Inc.
 
 ;; Author: Daniel Pfeiffer <occitan@esperanto.org>
 ;; Version: 2.0f
@@ -204,6 +205,7 @@
 
 (autoload 'comint-completion-at-point "comint")
 (autoload 'comint-filename-completion "comint")
+(autoload 'comint-send-string "comint")
 (autoload 'shell-command-completion "shell")
 (autoload 'shell-environment-variable-completion "shell")
 
@@ -1223,9 +1225,10 @@ and command `sh-reset-indent-vars-to-global-values'."
   :type 'hook
   :group 'sh-script)
 
-(defcustom sh-mode-hook nil
+(defcustom sh-mode-hook '(sh-electric-here-document-mode)
   "Hook run by `sh-mode'."
   :type 'hook
+  :options '(sh-electric-here-document-mode)
   :group 'sh-script)
 
 (defcustom sh-learn-basic-offset nil
@@ -1450,7 +1453,7 @@ This is for the rc shell."
 (defun sh-mkword-regexpr (word)
   "Make a regexp which matches WORD as a word.
 This specifically excludes an occurrence of WORD followed by
-punctuation characters like '-'."
+punctuation characters like `-'."
   (concat word "\\([^-[:alnum:]_]\\|$\\)"))
 
 (defconst sh-re-done (sh-mkword-regexpr "done"))
@@ -1580,7 +1583,8 @@ assumed.  Since filenames rarely give a clue, they are not further analyzed.
 This mode adapts to the variations between shells (see `sh-set-shell') by
 means of an inheritance based feature lookup (see `sh-feature').  This
 mechanism applies to all variables (including skeletons) that pertain to
-shell-specific features.
+shell-specific features.  Shell script files can use the `sh-shell' local
+variable to indicate the shell variant to be used for the file.
 
 The default style of this mode is that of Rosenblatt's Korn shell book.
 The syntax of the statements varies with the shell being used.  The
@@ -1613,7 +1617,8 @@ buffer indents as it currently is indented.
 \\[sh-execute-region]	 Have optional header and region be executed in a subshell.
 
 `sh-electric-here-document-mode' controls whether insertion of two
-unquoted < insert a here document.
+unquoted < insert a here document.  You can control this behavior by
+modifying `sh-mode-hook'.
 
 If you generally program a shell different from your login shell you can
 set `sh-shell-file' accordingly.  If your shell's file name doesn't correctly
@@ -1650,7 +1655,6 @@ with your script for an edit-interpret-debug cycle."
   (setq-local syntax-propertize-function #'sh-syntax-propertize-function)
   (add-hook 'syntax-propertize-extend-region-functions
             #'syntax-propertize-multiline 'append 'local)
-  (sh-electric-here-document-mode 1)
   (setq-local skeleton-pair-alist '((?` _ ?`)))
   (setq-local skeleton-pair-filter-function 'sh-quoted-p)
   (setq-local skeleton-further-elements
@@ -2112,7 +2116,11 @@ May return nil if the line should not be treated as continued."
     ;; sh-indent-after-done: aligned completely differently.
     (`(:after . "in") (sh-var-value 'sh-indent-for-case-label))
     ;; sh-indent-for-continuation: Line continuations are handled differently.
-    (`(:after . ,(or `"(" `"{" `"[")) (sh-var-value 'sh-indent-after-open))
+    (`(:after . ,(or `"(" `"{" `"["))
+     (if (not (looking-at ".[ \t]*[^\n \t#]"))
+         (sh-var-value 'sh-indent-after-open)
+       (goto-char (1- (match-end 0)))
+       `(column . ,(current-column))))
     ;; sh-indent-after-function: we don't handle it differently.
     ))
 
@@ -2185,7 +2193,7 @@ Returns the construct's token and moves point before it, if so."
 Point should be before the newline."
   (save-excursion
     (let ((tok (funcall smie-backward-token-function)))
-      (if (or (when (equal tok "not") (forward-word 1) t)
+      (if (or (when (equal tok "not") (forward-word-strictly 1) t)
               (and (zerop (length tok)) (eq (char-before) ?\))))
           (not (sh-smie--rc-after-special-arg-p))
         (sh-smie--newline-semi-p tok)))))
@@ -2364,7 +2372,11 @@ argument) controls whether to insert a #!-line and think about making
 the visited file executable, and NO-QUERY-FLAG (the second argument)
 controls whether to query about making the visited file executable.
 
-Calls the value of `sh-set-shell-hook' if set."
+Calls the value of `sh-set-shell-hook' if set.
+
+Shell script files can cause this function be called automatically
+when the file is visited by having a `sh-shell' file-local variable
+whose value is the shell name (don't quote it)."
   (interactive (list (completing-read
                       (format "Shell (default %s): "
                               sh-shell-file)

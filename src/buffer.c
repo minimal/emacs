@@ -1,14 +1,14 @@
 /* Buffer manipulation primitives for GNU Emacs.
 
-Copyright (C) 1985-1989, 1993-1995, 1997-2015 Free Software Foundation,
+Copyright (C) 1985-1989, 1993-1995, 1997-2016 Free Software Foundation,
 Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -42,6 +42,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "blockinput.h"
 #include "keymap.h"
 #include "frame.h"
+#include "xwidget.h"
 
 #ifdef WINDOWSNT
 #include "w32heap.h"		/* for mmap_* */
@@ -1043,7 +1044,7 @@ DEFUN ("generate-new-buffer-name", Fgenerate_new_buffer_name,
        doc: /* Return a string that is the name of no existing buffer based on NAME.
 If there is no live buffer named NAME, then return NAME.
 Otherwise modify name by appending `<NUMBER>', incrementing NUMBER
-(starting at 2) until an unused name is found, and then return that name.
+\(starting at 2) until an unused name is found, and then return that name.
 Optional second argument IGNORE specifies a name that is okay to use (if
 it is in the sequence to be tried) even if a buffer with that name exists.
 
@@ -1746,6 +1747,7 @@ cleaning up all windows currently displaying the buffer to be killed. */)
   unlock_buffer (b);
 
   kill_buffer_processes (buffer);
+  kill_buffer_xwidgets (buffer);
 
   /* Killing buffer processes may run sentinels which may have killed
      our buffer.  */
@@ -2143,16 +2145,16 @@ DEFUN ("barf-if-buffer-read-only", Fbarf_if_buffer_read_only,
        doc: /* Signal a `buffer-read-only' error if the current buffer is read-only.
 If the text under POSITION (which defaults to point) has the
 `inhibit-read-only' text property set, the error will not be raised.  */)
-  (Lisp_Object pos)
+  (Lisp_Object position)
 {
-  if (NILP (pos))
-    XSETFASTINT (pos, PT);
+  if (NILP (position))
+    XSETFASTINT (position, PT);
   else
-    CHECK_NUMBER (pos);
+    CHECK_NUMBER (position);
 
   if (!NILP (BVAR (current_buffer, read_only))
       && NILP (Vinhibit_read_only)
-      && NILP (Fget_text_property (pos, Qinhibit_read_only, Qnil)))
+      && NILP (Fget_text_property (position, Qinhibit_read_only, Qnil)))
     xsignal1 (Qbuffer_read_only, Fcurrent_buffer ());
   return Qnil;
 }
@@ -3245,9 +3247,9 @@ record_overlay_string (struct sortstrlist *ssl, Lisp_Object str,
   else
     nbytes = SBYTES (str);
 
-  if (INT_ADD_OVERFLOW (ssl->bytes, nbytes))
+  if (INT_ADD_WRAPV (ssl->bytes, nbytes, &nbytes))
     memory_full (SIZE_MAX);
-  ssl->bytes += nbytes;
+  ssl->bytes = nbytes;
 
   if (STRINGP (str2))
     {
@@ -3259,9 +3261,9 @@ record_overlay_string (struct sortstrlist *ssl, Lisp_Object str,
       else
 	nbytes = SBYTES (str2);
 
-      if (INT_ADD_OVERFLOW (ssl->bytes, nbytes))
+      if (INT_ADD_WRAPV (ssl->bytes, nbytes, &nbytes))
 	memory_full (SIZE_MAX);
-      ssl->bytes += nbytes;
+      ssl->bytes = nbytes;
     }
 }
 
@@ -3357,9 +3359,8 @@ overlay_strings (ptrdiff_t pos, struct window *w, unsigned char **pstr)
       unsigned char *p;
       ptrdiff_t total;
 
-      if (INT_ADD_OVERFLOW (overlay_heads.bytes, overlay_tails.bytes))
+      if (INT_ADD_WRAPV (overlay_heads.bytes, overlay_tails.bytes, &total))
 	memory_full (SIZE_MAX);
-      total = overlay_heads.bytes + overlay_tails.bytes;
       if (total > overlay_str_len)
 	overlay_str_buf = xpalloc (overlay_str_buf, &overlay_str_len,
 				   total - overlay_str_len, -1, 1);
@@ -3792,10 +3793,10 @@ If omitted, BUFFER defaults to the current buffer.
 BEG and END may be integers or markers.
 The fourth arg FRONT-ADVANCE, if non-nil, makes the marker
 for the front of the overlay advance when text is inserted there
-(which means the text *is not* included in the overlay).
+\(which means the text *is not* included in the overlay).
 The fifth arg REAR-ADVANCE, if non-nil, makes the marker
 for the rear of the overlay advance when text is inserted there
-(which means the text *is* included in the overlay).  */)
+\(which means the text *is* included in the overlay).  */)
   (Lisp_Object beg, Lisp_Object end, Lisp_Object buffer,
    Lisp_Object front_advance, Lisp_Object rear_advance)
 {
@@ -4480,6 +4481,23 @@ report_overlay_modification (Lisp_Object start, Lisp_Object end, bool after,
     ptrdiff_t size = last_overlay_modification_hooks_used;
     Lisp_Object *copy;
     ptrdiff_t i;
+
+    if (size)
+      {
+	Lisp_Object ovl
+	  = XVECTOR (last_overlay_modification_hooks)->contents[1];
+
+	/* If the buffer of the first overlay in the array doesn't
+	   match the current buffer, then these modification hooks
+	   should not be run in this buffer.  This could happen when
+	   some code calls some insdel functions, such as del_range_1,
+	   with the PREPARE argument false -- in that case this
+	   function is never called to record the overlay modification
+	   hook functions in the last_overlay_modification_hooks
+	   array, so anything we find there is not ours.  */
+	if (XMARKER (OVERLAY_START (ovl))->buffer != current_buffer)
+	  return;
+      }
 
     USE_SAFE_ALLOCA;
     SAFE_ALLOCA_LISP (copy, size);
@@ -5614,13 +5632,7 @@ Decimal digits after the % specify field width to which to pad.  */);
 		     doc: /* Symbol for current buffer's major mode.
 The default value (normally `fundamental-mode') affects new buffers.
 A value of nil means to use the current buffer's major mode, provided
-it is not marked as "special".
-
-When a mode is used by default, `find-file' switches to it before it
-reads the contents into the buffer and before it finishes setting up
-the buffer.  Thus, the mode and its hooks should not expect certain
-variables such as `buffer-read-only' and `buffer-file-coding-system'
-to be set up.  */);
+it is not marked as "special".  */);
 
   DEFVAR_PER_BUFFER ("mode-name", &BVAR (current_buffer, mode_name),
                      Qnil,
@@ -5787,11 +5799,14 @@ you probably should set this to -2 in that buffer.  */);
   DEFVAR_PER_BUFFER ("selective-display", &BVAR (current_buffer, selective_display),
 		     Qnil,
 		     doc: /* Non-nil enables selective display.
+
 An integer N as value means display only lines
 that start with less than N columns of space.
+
 A value of t means that the character ^M makes itself and
 all the rest of the line invisible; also, when saving the buffer
-in a file, save the ^M as a newline.  */);
+in a file, save the ^M as a newline.  This usage is obsolete; use
+overlays or text properties instead.  */);
 
   DEFVAR_PER_BUFFER ("selective-display-ellipses",
 		     &BVAR (current_buffer, selective_display_ellipses),
@@ -6013,7 +6028,7 @@ between 0.0 and 1.0, inclusive.  */);
 	       doc: /* List of functions to call before each text change.
 Two arguments are passed to each function: the positions of
 the beginning and end of the range of old text to be changed.
-(For an insertion, the beginning and end are at the same place.)
+\(For an insertion, the beginning and end are at the same place.)
 No information is given about the length of the text after the change.
 
 Buffer changes made while executing the `before-change-functions'
@@ -6030,7 +6045,7 @@ from happening repeatedly and making Emacs nonfunctional.  */);
 Three arguments are passed to each function: the positions of
 the beginning and end of the range of changed text,
 and the length in chars of the pre-change text replaced by that range.
-(For an insertion, the pre-change length is zero;
+\(For an insertion, the pre-change length is zero;
 for a deletion, that length is the number of chars deleted,
 and the post-change beginning and end are at the same place.)
 
@@ -6075,7 +6090,7 @@ was modified between BEG and END.  PROPERTY is the property name,
 and VALUE is the old value.
 
 An entry (apply FUN-NAME . ARGS) means undo the change with
-(apply FUN-NAME ARGS).
+\(apply FUN-NAME ARGS).
 
 An entry (apply DELTA BEG END FUN-NAME . ARGS) supports selective undo
 in the active region.  BEG and END is the range affected by this entry
@@ -6185,11 +6200,11 @@ all windows or just the selected window.
 
 Lisp programs may give this variable certain special values:
 
-- A value of `lambda' enables Transient Mark mode temporarily.
-  It is disabled again after any subsequent action that would
+- The symbol `lambda' enables Transient Mark mode temporarily.
+  The mode is disabled again after any subsequent action that would
   normally deactivate the mark (e.g. buffer modification).
 
-- A value of (only . OLDVAL) enables Transient Mark mode
+- The pair (only . OLDVAL) enables Transient Mark mode
   temporarily.  After any subsequent point motion command that is
   not shift-translated, or any other action that would normally
   deactivate the mark (e.g. buffer modification), the value of
@@ -6235,7 +6250,7 @@ to the default frame line height.  A value of nil means add no extra space.  */)
 		     doc: /* Non-nil means show a cursor in non-selected windows.
 If nil, only shows a cursor in the selected window.
 If t, displays a cursor related to the usual cursor type
-(a solid box becomes hollow, a bar becomes a narrower bar).
+\(a solid box becomes hollow, a bar becomes a narrower bar).
 You can also specify the cursor type as in the `cursor-type' variable.
 Use Custom to set this variable and update the display.  */);
 

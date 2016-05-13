@@ -1,12 +1,12 @@
 /* Filesystem notifications support for GNU Emacs on the Microsoft Windows API.
-   Copyright (C) 2012-2015 Free Software Foundation, Inc.
+   Copyright (C) 2012-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -144,8 +144,9 @@ send_notifications (BYTE *info, DWORD info_size, void *desc,
       if (!notification_buffer_in_use)
 	{
 	  if (info_size)
-	    memcpy (file_notifications, info, info_size);
-	  notifications_size = info_size;
+	    memcpy (file_notifications, info,
+		    min (info_size, sizeof (file_notifications)));
+	  notifications_size = min (info_size, sizeof (file_notifications));
 	  notifications_desc = desc;
 	  /* If PostMessage fails, the message queue is full.  If that
 	     happens, the last thing they will worry about is file

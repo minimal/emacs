@@ -1,14 +1,14 @@
 /* Storage allocation and gc for GNU Emacs Lisp interpreter.
 
-Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2015 Free Software
+Copyright (C) 1985-1986, 1988, 1993-1995, 1997-2016 Free Software
 Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -92,6 +92,18 @@ static bool valgrind_p;
 #include "w32heap.h"	/* for sbrk */
 #endif
 
+#if defined DOUG_LEA_MALLOC || defined GNU_LINUX
+/* The address where the heap starts.  */
+void *
+my_heap_start (void)
+{
+  static void *start;
+  if (! start)
+    start = sbrk (0);
+  return start;
+}
+#endif
+
 #ifdef DOUG_LEA_MALLOC
 
 #include <malloc.h>
@@ -101,7 +113,69 @@ static bool valgrind_p;
 
 #define MMAP_MAX_AREAS 100000000
 
-#endif /* not DOUG_LEA_MALLOC */
+/* A pointer to the memory allocated that copies that static data
+   inside glibc's malloc.  */
+static void *malloc_state_ptr;
+
+/* Get and free this pointer; useful around unexec.  */
+void
+alloc_unexec_pre (void)
+{
+  malloc_state_ptr = malloc_get_state ();
+}
+void
+alloc_unexec_post (void)
+{
+  free (malloc_state_ptr);
+}
+
+/* Restore the dumped malloc state.  Because malloc can be invoked
+   even before main (e.g. by the dynamic linker), the dumped malloc
+   state must be restored as early as possible using this special hook.  */
+static void
+malloc_initialize_hook (void)
+{
+  static bool malloc_using_checking;
+
+  if (! initialized)
+    {
+      my_heap_start ();
+      malloc_using_checking = getenv ("MALLOC_CHECK_") != NULL;
+    }
+  else
+    {
+      if (!malloc_using_checking)
+	{
+	  /* Work around a bug in glibc's malloc.  MALLOC_CHECK_ must be
+	     ignored if the heap to be restored was constructed without
+	     malloc checking.  Can't use unsetenv, since that calls malloc.  */
+	  char **p = environ;
+	  if (p)
+	    for (; *p; p++)
+	      if (strncmp (*p, "MALLOC_CHECK_=", 14) == 0)
+		{
+		  do
+		    *p = p[1];
+		  while (*++p);
+
+		  break;
+		}
+	}
+
+      malloc_set_state (malloc_state_ptr);
+# ifndef XMALLOC_OVERRUN_CHECK
+      alloc_unexec_post ();
+# endif
+    }
+}
+
+# ifndef __MALLOC_HOOK_VOLATILE
+#  define __MALLOC_HOOK_VOLATILE
+# endif
+voidfuncptr __MALLOC_HOOK_VOLATILE __malloc_initialize_hook
+  = malloc_initialize_hook;
+
+#endif
 
 /* Mark, unmark, query mark bit of a Lisp string.  S must be a pointer
    to a struct Lisp_String.  */
@@ -406,23 +480,36 @@ ALIGN (void *ptr, int alignment)
    If A is a symbol, extract the hidden pointer's offset from lispsym,
    converted to void *.  */
 
-static void *
-XPNTR_OR_SYMBOL_OFFSET (Lisp_Object a)
-{
-  intptr_t i = USE_LSB_TAG ? XLI (a) - XTYPE (a) : XLI (a) & VALMASK;
-  return (void *) i;
-}
+#define macro_XPNTR_OR_SYMBOL_OFFSET(a) \
+  ((void *) (intptr_t) (USE_LSB_TAG ? XLI (a) - XTYPE (a) : XLI (a) & VALMASK))
 
 /* Extract the pointer hidden within A.  */
 
-static void *
+#define macro_XPNTR(a) \
+  ((void *) ((intptr_t) XPNTR_OR_SYMBOL_OFFSET (a) \
+	     + (SYMBOLP (a) ? (char *) lispsym : NULL)))
+
+/* For pointer access, define XPNTR and XPNTR_OR_SYMBOL_OFFSET as
+   functions, as functions are cleaner and can be used in debuggers.
+   Also, define them as macros if being compiled with GCC without
+   optimization, for performance in that case.  The macro_* names are
+   private to this section of code.  */
+
+static ATTRIBUTE_UNUSED void *
+XPNTR_OR_SYMBOL_OFFSET (Lisp_Object a)
+{
+  return macro_XPNTR_OR_SYMBOL_OFFSET (a);
+}
+static ATTRIBUTE_UNUSED void *
 XPNTR (Lisp_Object a)
 {
-  void *p = XPNTR_OR_SYMBOL_OFFSET (a);
-  if (SYMBOLP (a))
-    p = (intptr_t) p + (char *) lispsym;
-  return p;
+  return macro_XPNTR (a);
 }
+
+#if DEFINE_KEY_OPS_AS_MACROS
+# define XPNTR_OR_SYMBOL_OFFSET(a) macro_XPNTR_OR_SYMBOL_OFFSET (a)
+# define XPNTR(a) macro_XPNTR (a)
+#endif
 
 static void
 XFLOAT_INIT (Lisp_Object f, double n)
@@ -715,8 +802,10 @@ malloc_unblock_input (void)
       malloc_probe (size);			\
   } while (0)
 
+static void *lmalloc (size_t) ATTRIBUTE_MALLOC_SIZE ((1));
+static void *lrealloc (void *, size_t);
 
-/* Like malloc but check for no memory and block interrupt input..  */
+/* Like malloc but check for no memory and block interrupt input.  */
 
 void *
 xmalloc (size_t size)
@@ -724,7 +813,7 @@ xmalloc (size_t size)
   void *val;
 
   MALLOC_BLOCK_INPUT;
-  val = malloc (size);
+  val = lmalloc (size);
   MALLOC_UNBLOCK_INPUT;
 
   if (!val && size)
@@ -741,7 +830,7 @@ xzalloc (size_t size)
   void *val;
 
   MALLOC_BLOCK_INPUT;
-  val = malloc (size);
+  val = lmalloc (size);
   MALLOC_UNBLOCK_INPUT;
 
   if (!val && size)
@@ -762,9 +851,9 @@ xrealloc (void *block, size_t size)
   /* We must call malloc explicitly when BLOCK is 0, since some
      reallocs don't do this.  */
   if (! block)
-    val = malloc (size);
+    val = lmalloc (size);
   else
-    val = realloc (block, size);
+    val = lrealloc (block, size);
   MALLOC_UNBLOCK_INPUT;
 
   if (!val && size)
@@ -802,9 +891,10 @@ void *
 xnmalloc (ptrdiff_t nitems, ptrdiff_t item_size)
 {
   eassert (0 <= nitems && 0 < item_size);
-  if (min (PTRDIFF_MAX, SIZE_MAX) / item_size < nitems)
+  ptrdiff_t nbytes;
+  if (INT_MULTIPLY_WRAPV (nitems, item_size, &nbytes) || SIZE_MAX < nbytes)
     memory_full (SIZE_MAX);
-  return xmalloc (nitems * item_size);
+  return xmalloc (nbytes);
 }
 
 
@@ -815,9 +905,10 @@ void *
 xnrealloc (void *pa, ptrdiff_t nitems, ptrdiff_t item_size)
 {
   eassert (0 <= nitems && 0 < item_size);
-  if (min (PTRDIFF_MAX, SIZE_MAX) / item_size < nitems)
+  ptrdiff_t nbytes;
+  if (INT_MULTIPLY_WRAPV (nitems, item_size, &nbytes) || SIZE_MAX < nbytes)
     memory_full (SIZE_MAX);
-  return xrealloc (pa, nitems * item_size);
+  return xrealloc (pa, nbytes);
 }
 
 
@@ -848,33 +939,43 @@ void *
 xpalloc (void *pa, ptrdiff_t *nitems, ptrdiff_t nitems_incr_min,
 	 ptrdiff_t nitems_max, ptrdiff_t item_size)
 {
+  ptrdiff_t n0 = *nitems;
+  eassume (0 < item_size && 0 < nitems_incr_min && 0 <= n0 && -1 <= nitems_max);
+
   /* The approximate size to use for initial small allocation
      requests.  This is the largest "small" request for the GNU C
      library malloc.  */
   enum { DEFAULT_MXFAST = 64 * sizeof (size_t) / 4 };
 
   /* If the array is tiny, grow it to about (but no greater than)
-     DEFAULT_MXFAST bytes.  Otherwise, grow it by about 50%.  */
-  ptrdiff_t n = *nitems;
-  ptrdiff_t tiny_max = DEFAULT_MXFAST / item_size - n;
-  ptrdiff_t half_again = n >> 1;
-  ptrdiff_t incr_estimate = max (tiny_max, half_again);
-
-  /* Adjust the increment according to three constraints: NITEMS_INCR_MIN,
+     DEFAULT_MXFAST bytes.  Otherwise, grow it by about 50%.
+     Adjust the growth according to three constraints: NITEMS_INCR_MIN,
      NITEMS_MAX, and what the C language can represent safely.  */
-  ptrdiff_t C_language_max = min (PTRDIFF_MAX, SIZE_MAX) / item_size;
-  ptrdiff_t n_max = (0 <= nitems_max && nitems_max < C_language_max
-		     ? nitems_max : C_language_max);
-  ptrdiff_t nitems_incr_max = n_max - n;
-  ptrdiff_t incr = max (nitems_incr_min, min (incr_estimate, nitems_incr_max));
 
-  eassert (0 < item_size && 0 < nitems_incr_min && 0 <= n && -1 <= nitems_max);
+  ptrdiff_t n, nbytes;
+  if (INT_ADD_WRAPV (n0, n0 >> 1, &n))
+    n = PTRDIFF_MAX;
+  if (0 <= nitems_max && nitems_max < n)
+    n = nitems_max;
+
+  ptrdiff_t adjusted_nbytes
+    = ((INT_MULTIPLY_WRAPV (n, item_size, &nbytes) || SIZE_MAX < nbytes)
+       ? min (PTRDIFF_MAX, SIZE_MAX)
+       : nbytes < DEFAULT_MXFAST ? DEFAULT_MXFAST : 0);
+  if (adjusted_nbytes)
+    {
+      n = adjusted_nbytes / item_size;
+      nbytes = adjusted_nbytes - adjusted_nbytes % item_size;
+    }
+
   if (! pa)
     *nitems = 0;
-  if (nitems_incr_max < incr)
+  if (n - n0 < nitems_incr_min
+      && (INT_ADD_WRAPV (n0, nitems_incr_min, &n)
+	  || (0 <= nitems_max && nitems_max < n)
+	  || INT_MULTIPLY_WRAPV (n, item_size, &nbytes)))
     memory_full (SIZE_MAX);
-  n += incr;
-  pa = xrealloc (pa, n * item_size);
+  pa = xrealloc (pa, nbytes);
   *nitems = n;
   return pa;
 }
@@ -954,7 +1055,7 @@ lisp_malloc (size_t nbytes, enum mem_type type)
   allocated_mem_type = type;
 #endif
 
-  val = malloc (nbytes);
+  val = lmalloc (nbytes);
 
 #if ! USE_LSB_TAG
   /* If the memory just allocated cannot be addressed thru a Lisp
@@ -1006,15 +1107,18 @@ lisp_free (void *block)
 
 /* Use aligned_alloc if it or a simple substitute is available.
    Address sanitization breaks aligned allocation, as of gcc 4.8.2 and
-   clang 3.3 anyway.  */
+   clang 3.3 anyway.  Aligned allocation is incompatible with
+   unexmacosx.c, so don't use it on Darwin.  */
 
-#if ! ADDRESS_SANITIZER
+#if ! ADDRESS_SANITIZER && !defined DARWIN_OS
 # if !defined SYSTEM_MALLOC && !defined DOUG_LEA_MALLOC && !defined HYBRID_MALLOC
 #  define USE_ALIGNED_ALLOC 1
+#  ifndef HAVE_ALIGNED_ALLOC
 /* Defined in gmalloc.c.  */
 void *aligned_alloc (size_t, size_t);
+#  endif
 # elif defined HYBRID_MALLOC
-#  if defined ALIGNED_ALLOC || defined HAVE_POSIX_MEMALIGN
+#  if defined HAVE_ALIGNED_ALLOC || defined HAVE_POSIX_MEMALIGN
 #   define USE_ALIGNED_ALLOC 1
 #   define aligned_alloc hybrid_aligned_alloc
 /* Defined in gmalloc.c.  */
@@ -1252,6 +1356,84 @@ lisp_align_free (void *block)
       free (ABLOCKS_BASE (abase));
     }
   MALLOC_UNBLOCK_INPUT;
+}
+
+#if !defined __GNUC__ && !defined __alignof__
+# define __alignof__(type) alignof (type)
+#endif
+
+/* True if malloc returns a multiple of GCALIGNMENT.  In practice this
+   holds if __alignof__ (max_align_t) is a multiple.  Use __alignof__
+   if available, as otherwise this check would fail with GCC x86.
+   This is a macro, not an enum constant, for portability to HP-UX
+   10.20 cc and AIX 3.2.5 xlc.  */
+#define MALLOC_IS_GC_ALIGNED (__alignof__ (max_align_t) % GCALIGNMENT == 0)
+
+/* True if P is suitably aligned for SIZE, where Lisp alignment may be
+   needed if SIZE is Lisp-aligned.  */
+
+static bool
+laligned (void *p, size_t size)
+{
+  return (MALLOC_IS_GC_ALIGNED || (intptr_t) p % GCALIGNMENT == 0
+	  || size % GCALIGNMENT != 0);
+}
+
+/* Like malloc and realloc except that if SIZE is Lisp-aligned, make
+   sure the result is too, if necessary by reallocating (typically
+   with larger and larger sizes) until the allocator returns a
+   Lisp-aligned pointer.  Code that needs to allocate C heap memory
+   for a Lisp object should use one of these functions to obtain a
+   pointer P; that way, if T is an enum Lisp_Type value and L ==
+   make_lisp_ptr (P, T), then XPNTR (L) == P and XTYPE (L) == T.
+
+   On typical modern platforms these functions' loops do not iterate.
+   On now-rare (and perhaps nonexistent) platforms, the loops in
+   theory could repeat forever.  If an infinite loop is possible on a
+   platform, a build would surely loop and the builder can then send
+   us a bug report.  Adding a counter to try to detect any such loop
+   would complicate the code (and possibly introduce bugs, in code
+   that's never really exercised) for little benefit.  */
+
+static void *
+lmalloc (size_t size)
+{
+#if USE_ALIGNED_ALLOC
+  if (! MALLOC_IS_GC_ALIGNED)
+    return aligned_alloc (GCALIGNMENT, size);
+#endif
+
+  void *p;
+  while (true)
+    {
+      p = malloc (size);
+      if (laligned (p, size))
+	break;
+      free (p);
+      size_t bigger;
+      if (! INT_ADD_WRAPV (size, GCALIGNMENT, &bigger))
+	size = bigger;
+    }
+
+  eassert ((intptr_t) p % GCALIGNMENT == 0);
+  return p;
+}
+
+static void *
+lrealloc (void *p, size_t size)
+{
+  while (true)
+    {
+      p = realloc (p, size);
+      if (laligned (p, size))
+	break;
+      size_t bigger;
+      if (! INT_ADD_WRAPV (size, GCALIGNMENT, &bigger))
+	size = bigger;
+    }
+
+  eassert ((intptr_t) p % GCALIGNMENT == 0);
+  return p;
 }
 
 
@@ -2094,8 +2276,11 @@ INIT must be an integer that represents a character.  */)
     {
       nbytes = XINT (length);
       val = make_uninit_string (nbytes);
-      memset (SDATA (val), c, nbytes);
-      SDATA (val)[nbytes] = 0;
+      if (nbytes)
+	{
+	  memset (SDATA (val), c, nbytes);
+	  SDATA (val)[nbytes] = 0;
+	}
     }
   else
     {
@@ -2104,9 +2289,8 @@ INIT must be an integer that represents a character.  */)
       EMACS_INT string_len = XINT (length);
       unsigned char *p, *beg, *end;
 
-      if (string_len > STRING_BYTES_MAX / len)
+      if (INT_MULTIPLY_WRAPV (len, string_len, &nbytes))
 	string_overflow ();
-      nbytes = len * string_len;
       val = make_uninit_multibyte_string (string_len, nbytes);
       for (beg = SDATA (val), p = beg, end = beg + nbytes; p < end; p += len)
 	{
@@ -2121,7 +2305,8 @@ INIT must be an integer that represents a character.  */)
 	      memcpy (p, beg, len);
 	    }
 	}
-      *p = 0;
+      if (nbytes)
+	*p = 0;
     }
 
   return val;
@@ -3164,7 +3349,8 @@ allocate_vector (EMACS_INT len)
   if (min ((nbytes_max - header_size) / word_size, MOST_POSITIVE_FIXNUM) < len)
     memory_full (SIZE_MAX);
   v = allocate_vectorlike (len);
-  v->header.size = len;
+  if (len)
+    v->header.size = len;
   return v;
 }
 
@@ -3544,7 +3730,6 @@ make_save_ptr_int (void *a, ptrdiff_t b)
   return val;
 }
 
-#if ! (defined USE_X_TOOLKIT || defined USE_GTK)
 Lisp_Object
 make_save_ptr_ptr (void *a, void *b)
 {
@@ -3555,7 +3740,6 @@ make_save_ptr_ptr (void *a, void *b)
   p->data[1].pointer = b;
   return val;
 }
-#endif
 
 Lisp_Object
 make_save_funcptr_ptr_obj (void (*a) (void), void *b, Lisp_Object c)
@@ -3699,6 +3883,23 @@ make_event_array (ptrdiff_t nargs, Lisp_Object *args)
     return result;
   }
 }
+
+#ifdef HAVE_MODULES
+/* Create a new module user ptr object.  */
+Lisp_Object
+make_user_ptr (void (*finalizer) (void *), void *p)
+{
+  Lisp_Object obj;
+  struct Lisp_User_Ptr *uptr;
+
+  obj = allocate_misc (Lisp_Misc_User_Ptr);
+  uptr = XUSER_PTR (obj);
+  uptr->finalizer = finalizer;
+  uptr->p = p;
+  return obj;
+}
+
+#endif
 
 static void
 init_finalizer_list (struct Lisp_Finalizer *head)
@@ -4548,6 +4749,10 @@ maybe_lisp_pointer (void *p)
   return (uintptr_t) p % GCALIGNMENT == 0;
 }
 
+#ifndef HAVE_MODULES
+enum { HAVE_MODULES = false };
+#endif
+
 /* If P points to Lisp data, mark that as live if it isn't already
    marked.  */
 
@@ -4561,8 +4766,17 @@ mark_maybe_pointer (void *p)
     VALGRIND_MAKE_MEM_DEFINED (&p, sizeof (p));
 #endif
 
-  if (!maybe_lisp_pointer (p))
-    return;
+  if (sizeof (Lisp_Object) == sizeof (void *) || !HAVE_MODULES)
+    {
+      if (!maybe_lisp_pointer (p))
+        return;
+    }
+  else
+    {
+      /* For the wide-int case, also mark emacs_value tagged pointers,
+	 which can be generated by emacs-module.c's value_to_lisp.  */
+      p = (void *) ((uintptr_t) p & ~(GCALIGNMENT - 1));
+    }
 
   m = mem_find (p);
   if (m != MEM_NIL)
@@ -4639,8 +4853,7 @@ mark_maybe_pointer (void *p)
 static void ATTRIBUTE_NO_SANITIZE_ADDRESS
 mark_memory (void *start, void *end)
 {
-  void **pp;
-  int i;
+  char *pp;
 
   /* Make START the pointer to the start of the memory region,
      if it isn't already.  */
@@ -4650,6 +4863,8 @@ mark_memory (void *start, void *end)
       start = end;
       end = tem;
     }
+
+  eassert (((uintptr_t) start) % GC_POINTER_ALIGNMENT == 0);
 
   /* Mark Lisp data pointed to.  This is necessary because, in some
      situations, the C compiler optimizes Lisp objects away, so that
@@ -4669,13 +4884,11 @@ mark_memory (void *start, void *end)
      away.  The only reference to the life string is through the
      pointer `s'.  */
 
-  for (pp = start; (void *) pp < end; pp++)
-    for (i = 0; i < sizeof *pp; i += GC_POINTER_ALIGNMENT)
-      {
-	void *p = *(void **) ((char *) pp + i);
-	mark_maybe_pointer (p);
-	mark_maybe_object (XIL ((intptr_t) p));
-      }
+  for (pp = start; (void *) pp < end; pp += GC_POINTER_ALIGNMENT)
+    {
+      mark_maybe_pointer (*(void **) pp);
+      mark_maybe_object (*(Lisp_Object *) pp);
+    }
 }
 
 #if !defined GC_SAVE_REGISTERS_ON_STACK && !defined GC_SETJMP_WORKS
@@ -5289,10 +5502,6 @@ total_bytes_of_live_objects (void)
 
 #ifdef HAVE_WINDOW_SYSTEM
 
-/* This code has a few issues on MS-Windows, see Bug#15876 and Bug#16140.  */
-
-#if !defined (HAVE_NTGUI)
-
 /* Remove unmarked font-spec and font-entity objects from ENTRY, which is
    (DRIVER-TYPE NUM-FRAMES FONT-CACHE-DATA ...), and return changed entry.  */
 
@@ -5307,21 +5516,49 @@ compact_font_cache_entry (Lisp_Object entry)
       Lisp_Object obj = XCAR (tail);
 
       /* Consider OBJ if it is (font-spec . [font-entity font-entity ...]).  */
-      if (CONSP (obj) && FONT_SPEC_P (XCAR (obj))
-	  && !VECTOR_MARKED_P (XFONT_SPEC (XCAR (obj)))
-	  && VECTORP (XCDR (obj)))
+      if (CONSP (obj) && GC_FONT_SPEC_P (XCAR (obj))
+	  && !VECTOR_MARKED_P (GC_XFONT_SPEC (XCAR (obj)))
+	  /* Don't use VECTORP here, as that calls ASIZE, which could
+	     hit assertion violation during GC.  */
+	  && (VECTORLIKEP (XCDR (obj))
+	      && ! (gc_asize (XCDR (obj)) & PSEUDOVECTOR_FLAG)))
 	{
-	  ptrdiff_t i, size = ASIZE (XCDR (obj)) & ~ARRAY_MARK_FLAG;
+	  ptrdiff_t i, size = gc_asize (XCDR (obj));
+	  Lisp_Object obj_cdr = XCDR (obj);
 
 	  /* If font-spec is not marked, most likely all font-entities
 	     are not marked too.  But we must be sure that nothing is
 	     marked within OBJ before we really drop it.  */
 	  for (i = 0; i < size; i++)
-	    if (VECTOR_MARKED_P (XFONT_ENTITY (AREF (XCDR (obj), i))))
-	      break;
+            {
+              Lisp_Object objlist;
+
+              if (VECTOR_MARKED_P (GC_XFONT_ENTITY (AREF (obj_cdr, i))))
+                break;
+
+              objlist = AREF (AREF (obj_cdr, i), FONT_OBJLIST_INDEX);
+              for (; CONSP (objlist); objlist = XCDR (objlist))
+                {
+                  Lisp_Object val = XCAR (objlist);
+                  struct font *font = GC_XFONT_OBJECT (val);
+
+                  if (!NILP (AREF (val, FONT_TYPE_INDEX))
+                      && VECTOR_MARKED_P(font))
+                    break;
+                }
+              if (CONSP (objlist))
+		{
+		  /* Found a marked font, bail out.  */
+		  break;
+		}
+            }
 
 	  if (i == size)
-	    drop = 1;
+	    {
+	      /* No marked fonts were found, so this entire font
+		 entity can be dropped.  */
+	      drop = 1;
+	    }
 	}
       if (drop)
 	*prev = XCDR (tail);
@@ -5330,8 +5567,6 @@ compact_font_cache_entry (Lisp_Object entry)
     }
   return entry;
 }
-
-#endif /* not HAVE_NTGUI */
 
 /* Compact font caches on all terminals and mark
    everything which is still here after compaction.  */
@@ -5344,7 +5579,6 @@ compact_font_caches (void)
   for (t = terminal_list; t; t = t->next_terminal)
     {
       Lisp_Object cache = TERMINAL_FONT_CACHE (t);
-#if !defined (HAVE_NTGUI)
       if (CONSP (cache))
 	{
 	  Lisp_Object entry;
@@ -5352,7 +5586,6 @@ compact_font_caches (void)
 	  for (entry = XCDR (cache); CONSP (entry); entry = XCDR (entry))
 	    XSETCAR (entry, compact_font_cache_entry (XCAR (entry)));
 	}
-#endif /* not HAVE_NTGUI */
       mark_object (cache);
     }
 }
@@ -5447,9 +5680,16 @@ garbage_collect_1 (void *end)
      don't let that cause a recursive GC.  */
   consing_since_gc = 0;
 
-  /* Save what's currently displayed in the echo area.  */
-  message_p = push_message ();
-  record_unwind_protect_void (pop_message_unwind);
+  /* Save what's currently displayed in the echo area.  Don't do that
+     if we are GC'ing because we've run out of memory, since
+     push_message will cons, and we might have no memory for that.  */
+  if (NILP (Vmemory_full))
+    {
+      message_p = push_message ();
+      record_unwind_protect_void (pop_message_unwind);
+    }
+  else
+    message_p = false;
 
   /* Save a copy of the contents of the stack, for debugging.  */
 #if MAX_SAVE_STACK > 0
@@ -5580,7 +5820,7 @@ garbage_collect_1 (void *end)
 	}
     }
 
-  if (garbage_collection_messages)
+  if (garbage_collection_messages && NILP (Vmemory_full))
     {
       if (message_p || minibuf_level > 0)
 	restore_message ();
@@ -6266,6 +6506,12 @@ mark_object (Lisp_Object arg)
           mark_object (XFINALIZER (obj)->function);
           break;
 
+#ifdef HAVE_MODULES
+	case Lisp_Misc_User_Ptr:
+	  XMISCANY (obj)->gcmarkbit = true;
+	  break;
+#endif
+
 	default:
 	  emacs_abort ();
 	}
@@ -6642,8 +6888,15 @@ sweep_misc (void)
             {
               if (mblk->markers[i].m.u_any.type == Lisp_Misc_Marker)
                 unchain_marker (&mblk->markers[i].m.u_marker);
-              if (mblk->markers[i].m.u_any.type == Lisp_Misc_Finalizer)
+              else if (mblk->markers[i].m.u_any.type == Lisp_Misc_Finalizer)
                 unchain_finalizer (&mblk->markers[i].m.u_finalizer);
+#ifdef HAVE_MODULES
+	      else if (mblk->markers[i].m.u_any.type == Lisp_Misc_User_Ptr)
+		{
+		  struct Lisp_User_Ptr *uptr = &mblk->markers[i].m.u_user_ptr;
+		  uptr->finalizer (uptr->p);
+		}
+#endif
               /* Set the type of the freed object to Lisp_Misc_Free.
                  We could leave the type alone, since nobody checks it,
                  but this might catch bugs faster.  */

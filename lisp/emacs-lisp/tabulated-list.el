@@ -1,6 +1,6 @@
 ;;; tabulated-list.el --- generic major mode for tabulated lists -*- lexical-binding: t -*-
 
-;; Copyright (C) 2011-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2011-2016 Free Software Foundation, Inc.
 
 ;; Author: Chong Yidong <cyd@stupidchicken.com>
 ;; Keywords: extensions, lisp
@@ -571,7 +571,6 @@ data in an ewoc may instead specify a printer function (e.g., one
 that calls `ewoc-enter-last'), with `tabulated-list-print-entry'
 as the ewoc pretty-printer."
   (setq-local truncate-lines t)
-  (setq-local buffer-read-only t)
   (setq-local buffer-undo-list t)
   (setq-local revert-buffer-function #'tabulated-list-revert)
   (setq-local glyphless-char-display tabulated-list-glyphless-char-display)

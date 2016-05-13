@@ -1,6 +1,6 @@
 ;;; skeleton.el --- Lisp language extension for writing statement skeletons
 
-;; Copyright (C) 1993-1996, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1996, 2001-2016 Free Software Foundation, Inc.
 
 ;; Author: Daniel Pfeiffer <occitan@esperanto.org>
 ;; Maintainer: emacs-devel@gnu.org
@@ -244,7 +244,8 @@ When done with skeleton, but before going back to `_'-point call
 	 (setq skeleton-regions
 	       (if (> skeleton-regions 0)
 		   (list (copy-marker (point) t)
-			 (save-excursion (forward-word skeleton-regions)
+			 (save-excursion (forward-word-strictly
+                                          skeleton-regions)
 					 (point-marker)))
 		 (setq skeleton-regions (- skeleton-regions))
 		 ;; copy skeleton-regions - 1 elements from `mark-ring'

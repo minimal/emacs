@@ -1,6 +1,6 @@
 ;;; faces-tests.el --- Tests for faces.el            -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2013-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2013-2016 Free Software Foundation, Inc.
 
 ;; Author: Artur Malabarba <bruce.connor.am@gmail.com>
 ;; Keywords:
@@ -34,6 +34,11 @@
 (ert-deftest faces--test-color-at-point ()
   (with-temp-buffer
     (insert (propertize "STRING" 'face '(faces--test2 faces--test1)))
+    (goto-char (point-min))
+    (should (equal (background-color-at-point) "black"))
+    (should (equal (foreground-color-at-point) "black")))
+  (with-temp-buffer
+    (insert (propertize "STRING" 'face '(:foreground "black" :background "black")))
     (goto-char (point-min))
     (should (equal (background-color-at-point) "black"))
     (should (equal (foreground-color-at-point) "black")))

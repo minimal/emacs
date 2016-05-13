@@ -1,6 +1,6 @@
 ;;; mouse.el --- window system-independent mouse support  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1993-1995, 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993-1995, 1999-2016 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Keywords: hardware, mouse
@@ -931,20 +931,29 @@ If MODE is 2 then do the same for lines."
               (= start end)
 	      (char-after start)
               (= (char-syntax (char-after start)) ?\())
-	 (list start
-	       (save-excursion
-		 (goto-char start)
-		 (forward-sexp 1)
-		 (point))))
+         (if (/= (syntax-class (syntax-after start)) 4) ; raw syntax code for ?\(
+             ;; This happens in CC Mode when unbalanced parens in CPP
+             ;; constructs are given punctuation syntax with
+             ;; syntax-table text properties.  (2016-02-21).
+             (signal 'scan-error (list "Containing expression ends prematurely"
+                                       start start))
+           (list start
+                 (save-excursion
+                   (goto-char start)
+                   (forward-sexp 1)
+                   (point)))))
         ((and (= mode 1)
               (= start end)
 	      (char-after start)
               (= (char-syntax (char-after start)) ?\)))
-	 (list (save-excursion
-		 (goto-char (1+ start))
-		 (backward-sexp 1)
-		 (point))
-	       (1+ start)))
+         (if (/= (syntax-class (syntax-after start)) 5) ; raw syntax code for ?\)
+             ;; See above comment about CC Mode.
+             (signal 'scan-error (list "Unbalanced parentheses" start start))
+           (list (save-excursion
+                   (goto-char (1+ start))
+                   (backward-sexp 1)
+                   (point))
+                 (1+ start))))
 	((and (= mode 1)
               (= start end)
 	      (char-after start)

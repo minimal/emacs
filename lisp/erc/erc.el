@@ -1,6 +1,6 @@
 ;; erc.el --- An Emacs Internet Relay Chat client  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1997-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2016 Free Software Foundation, Inc.
 
 ;; Author: Alexander L. Belikoff (alexander@belikoff.net)
 ;; Contributors: Sergey Berezin (sergey.berezin@cs.cmu.edu),
@@ -265,14 +265,16 @@ A typical value would be \(\"JOIN\" \"PART\" \"QUIT\")."
 (defcustom erc-network-hide-list nil
   "A list of IRC networks to hide message types from.
 A typical value would be \((\"freenode\" \"MODE\")
-(\"OFTC\" \"JOIN\" \"QUIT\"))."
+  \(\"OFTC\" \"JOIN\" \"QUIT\"))."
+  :version "25.1"
   :group 'erc-ignore
   :type 'erc-message-type)
 
 (defcustom erc-channel-hide-list nil
   "A list of IRC channels to hide message types from.
 A typical value would be \((\"#emacs\" \"QUIT\" \"JOIN\")
-(\"#erc\" \"NICK\")."
+  \(\"#erc\" \"NICK\")."
+  :version "25.1"
   :group 'erc-ignore
   :type 'erc-message-type)
 
@@ -629,7 +631,7 @@ See also: `erc-get-channel-user-list'."
 
 (defvar erc-channel-modes nil
   "List of strings representing channel modes.
-E.g. '(\"i\" \"m\" \"s\" \"b Quake!*@*\")
+E.g. (\"i\" \"m\" \"s\" \"b Quake!*@*\")
 \(not sure the ban list will be here, but why not)")
 (make-variable-buffer-local 'erc-channel-modes)
 
@@ -1461,6 +1463,7 @@ Defaults to the server buffer."
        (concat "\C-l\\|\\(^" (regexp-quote (erc-prompt)) "\\)"))
   (set (make-local-variable 'paragraph-start)
        (concat "\\(" (regexp-quote (erc-prompt)) "\\)"))
+  (setq-local completion-ignore-case t)
   (add-hook 'completion-at-point-functions 'erc-complete-word-at-point nil t))
 
 ;; activation
@@ -1963,7 +1966,9 @@ Returns the buffer for the given server or channel."
     (erc-update-modules)
     (set-buffer buffer)
     (setq old-point (point))
-    (erc-mode)
+    (let ((old-recon-count erc-server-reconnect-count))
+      (erc-mode)
+      (setq erc-server-reconnect-count old-recon-count))
     (setq erc-server-announced-name server-announced-name)
     (setq erc-server-connected connected-p)
     ;; connection parameters
@@ -2023,7 +2028,8 @@ Returns the buffer for the given server or channel."
                            (auth-source-search :host server
                                                :max 1
                                                :user nick
-                                               :port port
+                                               ;; secrets.el wouldn’t accept a number
+                                               :port (if (numberp port) (number-to-string port) port)
                                                :require '(:secret)))
                       :secret)))
                 (if (functionp secret)
@@ -2203,6 +2209,7 @@ Arguments are the same as for `erc'."
 The process will be given the name NAME, its target buffer will be
 BUFFER.  HOST and PORT specify the connection target."
   (open-network-stream name buffer host port
+		       :nowait t
                        :type 'tls))
 
 ;;; Displaying error messages
@@ -2416,9 +2423,9 @@ If STRING is nil, the function does nothing."
   "Display STRING in the ERC BUFFER.
 All screen output must be done through this function.  If BUFFER is nil
 or omitted, the default ERC buffer for the `erc-session-server' is used.
-The BUFFER can be an actual buffer, a list of buffers, 'all or 'active.
-If BUFFER = 'all, the string is displayed in all the ERC buffers for the
-current session.  'active means the current active buffer
+The BUFFER can be an actual buffer, a list of buffers, `all' or `active'.
+If BUFFER = `all', the string is displayed in all the ERC buffers for the
+current session.  `active' means the current active buffer
 \(`erc-active-buffer').  If the buffer can't be resolved, the current
 buffer is used.  `erc-display-line-1' is used to display STRING.
 
@@ -3246,7 +3253,7 @@ LINE has the format \"USER ACTION\"."
 (put 'erc-cmd-ME 'do-not-parse-args t)
 
 (defun erc-cmd-ME\'S (line)
-  "Do a /ME command, but add the string \" 's\" to the beginning."
+  "Do a /ME command, but add the string \" \\='s\" to the beginning."
   (erc-cmd-ME (concat " 's" line)))
 (put 'erc-cmd-ME\'S 'do-not-parse-args t)
 
@@ -4483,6 +4490,7 @@ Set user modes and run `erc-after-connect' hook."
             (nick (car (erc-response.command-args parsed)))
             (buffer (process-buffer proc)))
         (setq erc-server-connected t)
+	(setq erc-server-reconnect-count 0)
         (erc-update-mode-line)
         (erc-set-initial-user-mode nick buffer)
         (erc-server-setup-periodical-ping buffer)
@@ -4818,9 +4826,14 @@ channel."
 			((pred (eq op-ch))    op)
 			((pred (eq adm-ch))   admin)
 			((pred (eq own-ch))   owner)
-			(_ (error "Unknown prefix char `%S'" ch) voice))
+			(_ (message "Unknown prefix char `%S'" ch) voice))
 		      'on)))
           (when updatep
+	    ;; If we didn't issue the NAMES request (consider two clients
+	    ;; talking to an IRC proxy), `erc-channel-begin-receiving-names'
+	    ;; will not have been called, so we have to do it here.
+	    (unless erc-channel-new-member-names
+	      (erc-channel-begin-receiving-names))
             (puthash (erc-downcase name) t
                      erc-channel-new-member-names)
             (erc-update-current-channel-member
@@ -5021,7 +5034,7 @@ See also `erc-remove-current-channel-member'."
 (defun erc-update-channel-topic (channel topic &optional modify)
   "Find a buffer for CHANNEL and set the TOPIC for it.
 
-If optional MODIFY is 'append or 'prepend, then append or prepend the
+If optional MODIFY is `append' or `prepend', then append or prepend the
 TOPIC string to the current topic."
   (erc-with-buffer (channel)
     (cond ((eq modify 'append)
@@ -5184,7 +5197,7 @@ person who changed the modes."
               (t (setq erc-channel-user-limit nil))))))
 
 (defun erc-update-channel-key (channel onoff key)
-  "Update CHANNEL's key to KEY if ONOFF is 'on or to nil if it's 'off."
+  "Update CHANNEL's key to KEY if ONOFF is `on' or to nil if it's `off'."
   (erc-with-buffer
       (channel)
     (cond ((eq onoff 'on) (setq erc-channel-key key))
@@ -6071,13 +6084,15 @@ If it doesn't exist, create it."
   (or (file-accessible-directory-p dir) (error "Cannot access %s" dir)))
 
 (defun erc-kill-query-buffers (process)
-  "Kill all buffers of PROCESS."
+  "Kill all buffers of PROCESS.
+Does nothing if PROCESS is not a process object."
   ;; here, we only want to match the channel buffers, to avoid
   ;; "selecting killed buffers" b0rkage.
-  (erc-with-all-buffers-of-server process
-    (lambda ()
-      (not (erc-server-buffer-p)))
-    (kill-buffer (current-buffer))))
+  (when (processp process)
+    (erc-with-all-buffers-of-server process
+      (lambda ()
+	(not (erc-server-buffer-p)))
+      (kill-buffer (current-buffer)))))
 
 (defun erc-nick-at-point ()
   "Give information about the nickname at `point'.
@@ -6698,7 +6713,7 @@ or `erc-kill-buffer-hook' if any other buffer."
     (cond
      ((eq (erc-server-buffer) (current-buffer))
       (run-hooks 'erc-kill-server-hook))
-     ((erc-channel-p (erc-default-target))
+     ((erc-channel-p (or (erc-default-target) (buffer-name)))
       (run-hooks 'erc-kill-channel-hook))
      (t
       (run-hooks 'erc-kill-buffer-hook)))))
@@ -6726,7 +6741,7 @@ This function should be on `erc-kill-channel-hook'."
   (text-property-not-all (point-min) (point-max) 'erc-parsed nil))
 
 (defun erc-restore-text-properties ()
-  "Restore the property 'erc-parsed for the region."
+  "Restore the property `erc-parsed' for the region."
   (let ((parsed-posn (erc-find-parsed-property)))
     (put-text-property
      (point-min) (point-max)

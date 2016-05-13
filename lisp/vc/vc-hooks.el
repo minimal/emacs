@@ -1,6 +1,6 @@
 ;;; vc-hooks.el --- resident support for version-control
 
-;; Copyright (C) 1992-1996, 1998-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992-1996, 1998-2016 Free Software Foundation, Inc.
 
 ;; Author:     FSF (see vc.el for full credits)
 ;; Maintainer: Andre Spiegel <spiegel@gnu.org>
@@ -40,7 +40,7 @@
   :group 'mode-line
   :version "25.1")
 
-(defface vc-state-base-face
+(defface vc-state-base
   '((default))
   "Base face for VC state indicator."
   :group 'vc-faces
@@ -48,50 +48,50 @@
   :version "25.1")
 
 (defface vc-up-to-date-state
-  '((default :inherit vc-state-base-face))
+  '((default :inherit vc-state-base))
   "Face for VC modeline state when the file is up to date."
   :version "25.1"
   :group 'vc-faces)
 
 (defface vc-needs-update-state
-  '((default :inherit vc-state-base-face))
+  '((default :inherit vc-state-base))
   "Face for VC modeline state when the file needs update."
   :version "25.1"
   :group 'vc-faces)
 
 (defface vc-locked-state
-  '((default :inherit vc-state-base-face))
+  '((default :inherit vc-state-base))
   "Face for VC modeline state when the file locked."
   :version "25.1"
   :group 'vc-faces)
 
 (defface vc-locally-added-state
-  '((default :inherit vc-state-base-face))
+  '((default :inherit vc-state-base))
   "Face for VC modeline state when the file is locally added."
   :version "25.1"
   :group 'vc-faces)
 
 (defface vc-conflict-state
-  '((default :inherit vc-state-base-face))
+  '((default :inherit vc-state-base))
   "Face for VC modeline state when the file contains merge conflicts."
   :version "25.1"
   :group 'vc-faces)
 
 (defface vc-removed-state
-  '((default :inherit vc-state-base-face))
+  '((default :inherit vc-state-base))
   "Face for VC modeline state when the file was removed from the VC system."
   :version "25.1"
   :group 'vc-faces)
 
 (defface vc-missing-state
-  '((default :inherit vc-state-base-face))
+  '((default :inherit vc-state-base))
   "Face for VC modeline state when the file is missing from the file system."
   :version "25.1"
   :group 'vc-faces)
 
 (defface vc-edited-state
-  '((default :inherit vc-state-base-face))
-  "Face for VC modeline state when the file is up to date."
+  '((default :inherit vc-state-base))
+  "Face for VC modeline state when the file is edited."
   :version "25.1"
   :group 'vc-faces)
 
@@ -122,7 +122,7 @@ An empty list disables VC altogether."
   :group 'vc)
 
 ;; Note: we don't actually have a darcs back end yet.
-;; Also, Meta-CVS (corresponding to MCVS) and Arch are unsupported.
+;; Also, Arch is unsupported, and the Meta-CVS back end has been removed.
 ;; The Arch back end will be retrieved and fixed if it is ever required.
 (defcustom vc-directory-exclusion-list (purecopy '("SCCS" "RCS" "CVS" "MCVS"
 					 ".src" ".svn" ".git" ".hg" ".bzr"
@@ -243,12 +243,12 @@ if that doesn't exist either, return nil."
   "Call for BACKEND the implementation of FUNCTION-NAME with the given ARGS.
 Calls
 
-    (apply 'vc-BACKEND-FUN ARGS)
+    (apply \\='vc-BACKEND-FUN ARGS)
 
 if vc-BACKEND-FUN exists (after trying to find it in vc-BACKEND.el)
 and else calls
 
-    (apply 'vc-default-FUN BACKEND ARGS)
+    (apply \\='vc-default-FUN BACKEND ARGS)
 
 It is usually called via the `vc-call' macro."
   (let ((f (assoc function-name (get backend 'vc-functions))))
@@ -476,7 +476,7 @@ status of this file.  Otherwise, the value returned is one of:
   ;; - `copied' and `moved' (might be handled by `removed' and `added')
   (or (vc-file-getprop file 'vc-state)
       (when (> (length file) 0)         ;Why??  --Stef
-	(setq backend (or backend (vc-responsible-backend file)))
+	(setq backend (or backend (vc-backend file)))
 	(when backend
           (vc-state-refresh file backend)))))
 
@@ -495,7 +495,7 @@ status of this file.  Otherwise, the value returned is one of:
 If FILE is not registered, this function always returns nil."
   (or (vc-file-getprop file 'vc-working-revision)
       (progn
-	(setq backend (or backend (vc-responsible-backend file)))
+	(setq backend (or backend (vc-backend file)))
 	(when backend
 	  (vc-file-setprop file 'vc-working-revision
 			   (vc-call-backend backend 'working-revision file))))))
@@ -791,7 +791,11 @@ current, and kill the buffer that visits the link."
   nil)
 
 (defun vc-refresh-state ()
-  "Activate or deactivate VC mode as appropriate."
+  "Refresh the VC state of the current buffer's file.
+
+This command is more thorough than `vc-state-refresh', in that it
+also supports switching a back-end or removing the file from VC.
+In the latter case, VC mode is deactivated for this buffer."
   (interactive)
   ;; Recompute whether file is version controlled,
   ;; if user has killed the buffer and revisited.

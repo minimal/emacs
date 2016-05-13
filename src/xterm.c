@@ -1,13 +1,13 @@
 /* X Communication module for terminals which understand the X protocol.
 
-Copyright (C) 1989, 1993-2015 Free Software Foundation, Inc.
+Copyright (C) 1989, 1993-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -62,6 +62,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "composite.h"
 #include "frame.h"
 #include "dispextern.h"
+#include "xwidget.h"
 #include "fontset.h"
 #include "termhooks.h"
 #include "termopts.h"
@@ -569,7 +570,8 @@ x_cr_export_frames (Lisp_Object frames, cairo_surface_type_t surface_type)
   Lisp_Object acc = Qnil;
   int count = SPECPDL_INDEX ();
 
-  Fredisplay (Qt);
+  specbind (Qredisplay_dont_pause, Qt);
+  redisplay_preserve_echo_area (31);
 
   f = XFRAME (XCAR (frames));
   frames = XCDR (frames);
@@ -611,24 +613,18 @@ x_cr_export_frames (Lisp_Object frames, cairo_surface_type_t surface_type)
   cr = cairo_create (surface);
   cairo_surface_destroy (surface);
   record_unwind_protect (x_cr_destroy, make_save_ptr (cr));
-  unblock_input ();
 
   while (1)
     {
-      QUIT;
-
-      block_input ();
       x_free_cr_resources (f);
       FRAME_CR_CONTEXT (f) = cr;
       x_clear_area (f, 0, 0, width, height);
       expose_frame (f, 0, 0, width, height);
       FRAME_CR_CONTEXT (f) = NULL;
-      unblock_input ();
 
       if (NILP (frames))
 	break;
 
-      block_input ();
       cairo_surface_show_page (surface);
       f = XFRAME (XCAR (frames));
       frames = XCDR (frames);
@@ -636,18 +632,21 @@ x_cr_export_frames (Lisp_Object frames, cairo_surface_type_t surface_type)
       height = FRAME_PIXEL_HEIGHT (f);
       if (surface_set_size_func)
 	(*surface_set_size_func) (surface, width, height);
+
       unblock_input ();
+      QUIT;
+      block_input ();
     }
 
 #ifdef CAIRO_HAS_PNG_FUNCTIONS
   if (surface_type == CAIRO_SURFACE_TYPE_IMAGE)
     {
-      block_input ();
       cairo_surface_flush (surface);
       cairo_surface_write_to_png_stream (surface, x_cr_accumulate_data, &acc);
-      unblock_input ();
     }
 #endif
+  unblock_input ();
+
   unbind_to (count, Qnil);
 
   return CALLN (Fapply, intern ("concat"), Fnreverse (acc));
@@ -1314,7 +1313,6 @@ x_draw_fringe_bitmap (struct window *w, struct glyph_row *row, struct draw_fring
 {
   struct frame *f = XFRAME (WINDOW_FRAME (w));
   Display *display = FRAME_X_DISPLAY (f);
-  Window window = FRAME_X_WINDOW (f);
   GC gc = f->output_data.x->normal_gc;
   struct face *face = p->face;
 
@@ -1357,6 +1355,7 @@ x_draw_fringe_bitmap (struct window *w, struct glyph_row *row, struct draw_fring
 #else  /* not USE_CAIRO */
   if (p->which)
     {
+      Window window = FRAME_X_WINDOW (f);
       char *bits;
       Pixmap pixmap, clipmask = (Pixmap) 0;
       int depth = DefaultDepthOfScreen (FRAME_X_SCREEN (f));
@@ -3513,6 +3512,10 @@ x_draw_glyph_string (struct glyph_string *s)
       x_draw_image_glyph_string (s);
       break;
 
+    case XWIDGET_GLYPH:
+      x_draw_xwidget_glyph_string (s);
+      break;
+
     case STRETCH_GLYPH:
       x_draw_stretch_glyph_string (s);
       break;
@@ -3755,14 +3758,13 @@ x_delete_glyphs (struct frame *f, register int n)
 /* Like XClearArea, but check that WIDTH and HEIGHT are reasonable.
    If they are <= 0, this is probably an error.  */
 
-static void
+static ATTRIBUTE_UNUSED void
 x_clear_area1 (Display *dpy, Window window,
                int x, int y, int width, int height, int exposures)
 {
   eassert (width > 0 && height > 0);
   XClearArea (dpy, window, x, y, width, height, exposures);
 }
-
 
 void
 x_clear_area (struct frame *f, int x, int y, int width, int height)
@@ -8922,6 +8924,10 @@ x_draw_bar_cursor (struct window *w, struct glyph_row *row, int width, enum text
   if (cursor_glyph == NULL)
     return;
 
+  /* Experimental avoidance of cursor on xwidget.  */
+  if (cursor_glyph->type == XWIDGET_GLYPH)
+    return;
+
   /* If on an image, draw like a normal cursor.  That's usually better
      visible than drawing a bar, esp. if the image is large so that
      the bar might not be in the window.  */
@@ -10096,39 +10102,69 @@ get_current_wm_state (struct frame *f,
                       int *size_state,
                       bool *sticky)
 {
-  Atom actual_type;
-  unsigned long actual_size, bytes_remaining;
-  int i, rc, actual_format;
+  unsigned long actual_size;
+  int i;
   bool is_hidden = false;
   struct x_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
   long max_len = 65536;
-  Display *dpy = FRAME_X_DISPLAY (f);
-  unsigned char *tmp_data = NULL;
   Atom target_type = XA_ATOM;
+  /* If XCB is available, we can avoid three XSync calls.  */
+#ifdef USE_XCB
+  xcb_get_property_cookie_t prop_cookie;
+  xcb_get_property_reply_t *prop;
+  xcb_atom_t *reply_data;
+#else
+  Display *dpy = FRAME_X_DISPLAY (f);
+  unsigned long bytes_remaining;
+  int rc, actual_format;
+  Atom actual_type;
+  unsigned char *tmp_data = NULL;
+  Atom *reply_data;
+#endif
 
   *sticky = false;
   *size_state = FULLSCREEN_NONE;
 
   block_input ();
+
+#ifdef USE_XCB
+  prop_cookie = xcb_get_property (dpyinfo->xcb_connection, 0, window,
+                                  dpyinfo->Xatom_net_wm_state,
+                                  target_type, 0, max_len);
+  prop = xcb_get_property_reply (dpyinfo->xcb_connection, prop_cookie, NULL);
+  if (prop && prop->type == target_type)
+    {
+      int actual_bytes = xcb_get_property_value_length (prop);
+      eassume (0 <= actual_bytes);
+      actual_size = actual_bytes / sizeof *reply_data;
+      reply_data = xcb_get_property_value (prop);
+    }
+  else
+    {
+      actual_size = 0;
+      is_hidden = FRAME_ICONIFIED_P (f);
+    }
+#else
   x_catch_errors (dpy);
   rc = XGetWindowProperty (dpy, window, dpyinfo->Xatom_net_wm_state,
                            0, max_len, False, target_type,
                            &actual_type, &actual_format, &actual_size,
                            &bytes_remaining, &tmp_data);
 
-  if (rc != Success || actual_type != target_type || x_had_errors_p (dpy))
+  if (rc == Success && actual_type == target_type && ! x_had_errors_p (dpy))
+    reply_data = (Atom *) tmp_data;
+  else
     {
-      if (tmp_data) XFree (tmp_data);
-      x_uncatch_errors ();
-      unblock_input ();
-      return !FRAME_ICONIFIED_P (f);
+      actual_size = 0;
+      is_hidden = FRAME_ICONIFIED_P (f);
     }
 
   x_uncatch_errors ();
+#endif
 
   for (i = 0; i < actual_size; ++i)
     {
-      Atom a = ((Atom*)tmp_data)[i];
+      Atom a = reply_data[i];
       if (a == dpyinfo->Xatom_net_wm_state_hidden)
 	is_hidden = true;
       else if (a == dpyinfo->Xatom_net_wm_state_maximized_horz)
@@ -10151,7 +10187,12 @@ get_current_wm_state (struct frame *f,
         *sticky = true;
     }
 
+#ifdef USE_XCB
+  free (prop);
+#else
   if (tmp_data) XFree (tmp_data);
+#endif
+
   unblock_input ();
   return ! is_hidden;
 }
@@ -10705,6 +10746,8 @@ x_set_window_size (struct frame *f, bool change_gravity,
   cancel_mouse_face (f);
 
   unblock_input ();
+
+  do_pending_window_change (false);
 }
 
 /* Move the mouse to position pixel PIX_X, PIX_Y relative to frame F.  */
@@ -11773,7 +11816,9 @@ x_term_init (Lisp_Object display_name, char *xrm_option, char *resource_name)
   struct terminal *terminal;
   struct x_display_info *dpyinfo;
   XrmDatabase xrdb;
-  ptrdiff_t lim;
+#ifdef USE_XCB
+  xcb_connection_t *xcb_conn;
+#endif
 
   block_input ();
 
@@ -11912,6 +11957,25 @@ x_term_init (Lisp_Object display_name, char *xrm_option, char *resource_name)
       return 0;
     }
 
+#ifdef USE_XCB
+  xcb_conn = XGetXCBConnection (dpy);
+  if (xcb_conn == 0)
+    {
+#ifdef USE_GTK
+      xg_display_close (dpy);
+#else
+#ifdef USE_X_TOOLKIT
+      XtCloseDisplay (dpy);
+#else
+      XCloseDisplay (dpy);
+#endif
+#endif /* ! USE_GTK */
+
+      unblock_input ();
+      return 0;
+    }
+#endif
+
   /* We have definitely succeeded.  Record the new connection.  */
 
   dpyinfo = xzalloc (sizeof *dpyinfo);
@@ -11962,6 +12026,13 @@ x_term_init (Lisp_Object display_name, char *xrm_option, char *resource_name)
   dpyinfo->name_list_element = Fcons (display_name, Qnil);
   dpyinfo->display = dpy;
   dpyinfo->connection = ConnectionNumber (dpyinfo->display);
+#ifdef USE_XCB
+  dpyinfo->xcb_connection = xcb_conn;
+#endif
+
+  /* http://lists.gnu.org/archive/html/emacs-devel/2015-11/msg00194.html  */
+  dpyinfo->smallest_font_height = 1;
+  dpyinfo->smallest_char_width = 1;
 
   /* Set the name of the terminal. */
   terminal->name = xlispstrdup (display_name);
@@ -11970,13 +12041,13 @@ x_term_init (Lisp_Object display_name, char *xrm_option, char *resource_name)
   XSetAfterFunction (x_current_display, x_trace_wire);
 #endif
 
-  lim = min (PTRDIFF_MAX, SIZE_MAX) - sizeof "@";
   Lisp_Object system_name = Fsystem_name ();
-  if (lim - SBYTES (Vinvocation_name) < SBYTES (system_name))
+  ptrdiff_t nbytes;
+  if (INT_ADD_WRAPV (SBYTES (Vinvocation_name), SBYTES (system_name) + 2,
+		     &nbytes))
     memory_full (SIZE_MAX);
   dpyinfo->x_id = ++x_display_id;
-  dpyinfo->x_id_name = xmalloc (SBYTES (Vinvocation_name)
-				+ SBYTES (system_name) + 2);
+  dpyinfo->x_id_name = xmalloc (nbytes);
   char *nametail = lispstpcpy (dpyinfo->x_id_name, Vinvocation_name);
   *nametail++ = '@';
   lispstpcpy (nametail, system_name);

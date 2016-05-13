@@ -1,6 +1,6 @@
 ;;; cedet-global.el --- GNU Global support for CEDET.
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2016 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <eric@siege-engine.com>
 ;; Package: cedet
@@ -104,7 +104,8 @@ SCOPE is the scope of the search, such as 'project or 'subdirs."
 
 (defun cedet-gnu-global-expand-filename (filename)
   "Expand the FILENAME with GNU Global.
-Return a fully qualified filename."
+Return a list of absolute filenames or nil if none found.
+Signal an error if Gnu global not available."
   (interactive "sFile: ")
   (let ((ans (with-current-buffer (cedet-gnu-global-call (list "-Pa" filename))
 	       (goto-char (point-min))
@@ -126,9 +127,9 @@ Return a fully qualified filename."
   (message "%s" (cedet-gnu-global-root)))
 
 (defun cedet-gnu-global-root (&optional dir)
-  "Return the root of any GNU Global scanned project.
-If a default starting DIR is not specified, the current buffer's
-`default-directory' is used."
+  "Return the root of any GNU Global scanned project containing DIR.
+Returns nil if no GNU Global project can be found.
+DIR defaults to `default-directory'."
   (let ((default-directory (or dir default-directory)))
     (with-current-buffer (cedet-gnu-global-call (list "-pq"))
       (goto-char (point-min))

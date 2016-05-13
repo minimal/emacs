@@ -2,14 +2,14 @@
 #define EMACS_W32_H
 
 /* Support routines for the NT version of Emacs.
-   Copyright (C) 1994, 2001-2015 Free Software Foundation, Inc.
+   Copyright (C) 1994, 2001-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -179,8 +179,11 @@ extern int _sys_wait_connect (int fd);
 
 extern HMODULE w32_delayed_load (Lisp_Object);
 
-extern int (WINAPI *pMultiByteToWideChar)(UINT,DWORD,LPCSTR,int,LPWSTR,int);
-extern int (WINAPI *pWideCharToMultiByte)(UINT,DWORD,LPCWSTR,int,LPSTR,int,LPCSTR,LPBOOL);
+typedef int (WINAPI *MultiByteToWideChar_Proc)(UINT,DWORD,LPCSTR,int,LPWSTR,int);
+typedef int (WINAPI *WideCharToMultiByte_Proc)(UINT,DWORD,LPCWSTR,int,LPSTR,int,LPCSTR,LPBOOL);
+extern MultiByteToWideChar_Proc pMultiByteToWideChar;
+extern WideCharToMultiByte_Proc pWideCharToMultiByte;
+extern DWORD multiByteToWideCharFlags;
 
 extern void init_environment (char **);
 extern void check_windows_init_file (void);
@@ -219,6 +222,9 @@ extern int w32_memory_info (unsigned long long *, unsigned long long *,
 
 /* Compare 2 UTF-8 strings in locale-dependent fashion.  */
 extern int w32_compare_strings (const char *, const char *, char *, int);
+
+/* Return a cryptographically secure seed for PRNG.  */
+extern int w32_init_random (void *, ptrdiff_t);
 
 #ifdef HAVE_GNUTLS
 #include <gnutls/gnutls.h>

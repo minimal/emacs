@@ -1,6 +1,6 @@
 ;;; subr.el --- basic lisp subroutines for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985-1986, 1992, 1994-1995, 1999-2015 Free Software
+;; Copyright (C) 1985-1986, 1992, 1994-1995, 1999-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -2086,6 +2086,10 @@ some sort of escape sequence, the ambiguity is resolved via `read-key-delay'."
                 (aref keys 1)
               key)))
       (cancel-timer timer)
+      ;; For some reason, `read-key(-sequence)' leaves the prompt in the echo
+      ;; area, whereas `read-event' seems to empty it just before returning
+      ;; (bug#22714).  So, let's mimic the behavior of `read-event'.
+      (message nil)
       (use-global-map old-global-map))))
 
 (defvar read-passwd-map
@@ -2626,29 +2630,7 @@ See also `locate-user-emacs-file'.")
   "Determine the boundaries of the default tag, based on text at point.
 Return a cons cell with the beginning and end of the found tag.
 If there is no plausible default, return nil."
-  (let (from to bound)
-    (when (or (progn
-		;; Look at text around `point'.
-		(save-excursion
-		  (skip-syntax-backward "w_") (setq from (point)))
-		(save-excursion
-		  (skip-syntax-forward "w_") (setq to (point)))
-		(> to from))
-	      ;; Look between `line-beginning-position' and `point'.
-	      (save-excursion
-		(and (setq bound (line-beginning-position))
-		     (skip-syntax-backward "^w_" bound)
-		     (> (setq to (point)) bound)
-		     (skip-syntax-backward "w_")
-		     (setq from (point))))
-	      ;; Look between `point' and `line-end-position'.
-	      (save-excursion
-		(and (setq bound (line-end-position))
-		     (skip-syntax-forward "^w_" bound)
-		     (< (setq from (point)) bound)
-		     (skip-syntax-forward "w_")
-		     (setq to (point)))))
-      (cons from to))))
+  (bounds-of-thing-at-point 'symbol))
 
 (defun find-tag-default ()
   "Determine default tag to search for, based on text at point.
@@ -3908,7 +3890,7 @@ If the feature is provided when evaluating code not associated with a
 file, FORM is evaluated immediately after the provide statement.
 
 Usually FILE is just a library name like \"font-lock\" or a feature name
-like 'font-lock.
+like `font-lock'.
 
 This function makes or adds to an entry on `after-load-alist'."
   (declare (compiler-macro
@@ -3963,7 +3945,8 @@ This function makes or adds to an entry on `after-load-alist'."
 (defmacro with-eval-after-load (file &rest body)
   "Execute BODY after FILE is loaded.
 FILE is normally a feature name, but it can also be a file name,
-in case that file does not provide any feature."
+in case that file does not provide any feature.  See `eval-after-load'
+for more details about the different forms of FILE and their semantics."
   (declare (indent 1) (debug t))
   `(eval-after-load ,file (lambda () ,@body)))
 
@@ -4123,6 +4106,41 @@ If SYNTAX is nil, return nil."
   (and syntax (logand (car syntax) 65535)))
 
 ;; Utility motion commands
+
+(defvar word-move-empty-char-table nil
+  "Used in `forward-word-strictly' and `backward-word-strictly'
+to countermand the effect of `find-word-boundary-function-table'.")
+
+(defun forward-word-strictly (&optional arg)
+  "Move point forward ARG words (backward if ARG is negative).
+If ARG is omitted or nil, move point forward one word.
+Normally returns t.
+If an edge of the buffer or a field boundary is reached, point is left there
+and the function returns nil.  Field boundaries are not noticed if
+`inhibit-field-text-motion' is non-nil.
+
+This function is like `forward-word', but it is not affected
+by `find-word-boundary-function-table' (as set up by
+e.g. `subword-mode').  It is also not interactive."
+  (let ((find-word-boundary-function-table
+         (if (char-table-p word-move-empty-char-table)
+             word-move-empty-char-table
+           (setq word-move-empty-char-table (make-char-table nil)))))
+    (forward-word (or arg 1))))
+
+(defun backward-word-strictly (&optional arg)
+  "Move backward until encountering the beginning of a word.
+With argument ARG, do this that many times.
+If ARG is omitted or nil, move point backward one word.
+
+This function is like `forward-word', but it is not affected
+by `find-word-boundary-function-table' (as set up by
+e.g. `subword-mode').  It is also not interactive."
+  (let ((find-word-boundary-function-table
+         (if (char-table-p word-move-empty-char-table)
+             word-move-empty-char-table
+           (setq word-move-empty-char-table (make-char-table nil)))))
+    (forward-word (- (or arg 1)))))
 
 ;;  Whitespace
 
@@ -4686,14 +4704,14 @@ Usually the separator is \".\", but it can be any other string.")
 
 
 (defconst version-regexp-alist
-  '(("^[-_+ ]?snapshot$"                                 . -4)
+  '(("^[-._+ ]?snapshot$"                                 . -4)
     ;; treat "1.2.3-20050920" and "1.2-3" as snapshot releases
-    ("^[-_+]$"                                           . -4)
+    ("^[-._+]$"                                           . -4)
     ;; treat "1.2.3-CVS" as snapshot release
-    ("^[-_+ ]?\\(cvs\\|git\\|bzr\\|svn\\|hg\\|darcs\\)$" . -4)
-    ("^[-_+ ]?alpha$"                                    . -3)
-    ("^[-_+ ]?beta$"                                     . -2)
-    ("^[-_+ ]?\\(pre\\|rc\\)$"                           . -1))
+    ("^[-._+ ]?\\(cvs\\|git\\|bzr\\|svn\\|hg\\|darcs\\)$" . -4)
+    ("^[-._+ ]?alpha$"                                    . -3)
+    ("^[-._+ ]?beta$"                                     . -2)
+    ("^[-._+ ]?\\(pre\\|rc\\)$"                           . -1))
   "Specify association between non-numeric version and its priority.
 
 This association is used to handle version string like \"1.0pre2\",
@@ -4703,6 +4721,7 @@ non-numeric part of a version string to an integer.  For example:
    String Version    Integer List Version
    \"0.9snapshot\"     (0  9 -4)
    \"1.0-git\"         (1  0 -4)
+   \"1.0.cvs\"         (1  0 -4)
    \"1.0pre2\"         (1  0 -1 2)
    \"1.0PRE2\"         (1  0 -1 2)
    \"22.8beta3\"       (22 8 -2 3)
@@ -4742,41 +4761,47 @@ in `version-regexp-alist'.
 
 Examples of valid version syntax:
 
-   1.0pre2   1.0.7.5   22.8beta3   0.9alpha1   6.9.30Beta
+   1.0pre2   1.0.7.5   22.8beta3   0.9alpha1   6.9.30Beta   2.4.snapshot   .5
 
 Examples of invalid version syntax:
 
-   1.0prepre2   1.0..7.5   22.8X3   alpha3.2   .5
+   1.0prepre2   1.0..7.5   22.8X3   alpha3.2
 
 Examples of version conversion:
 
    Version String    Version as a List of Integers
-   \"1.0.7.5\"         (1  0  7 5)
-   \"1.0pre2\"         (1  0 -1 2)
-   \"1.0PRE2\"         (1  0 -1 2)
-   \"22.8beta3\"       (22 8 -2 3)
-   \"22.8Beta3\"       (22 8 -2 3)
-   \"0.9alpha1\"       (0  9 -3 1)
+   \".5\"              (0 5)
+   \"0.9 alpha\"       (0  9 -3)
    \"0.9AlphA1\"       (0  9 -3 1)
-   \"0.9alpha\"        (0  9 -3)
    \"0.9snapshot\"     (0  9 -4)
    \"1.0-git\"         (1  0 -4)
+   \"1.0.7.5\"         (1  0  7 5)
+   \"1.0.cvs\"         (1  0 -4)
+   \"1.0PRE2\"         (1  0 -1 2)
+   \"1.0pre2\"         (1  0 -1 2)
+   \"22.8 Beta3\"      (22 8 -2 3)
+   \"22.8beta3\"       (22 8 -2 3)
 
 See documentation for `version-separator' and `version-regexp-alist'."
-  (or (and (stringp ver) (> (length ver) 0))
-      (error "Invalid version string: `%s'" ver))
+  (unless (stringp ver)
+    (error "Version must be a string"))
   ;; Change .x.y to 0.x.y
   (if (and (>= (length ver) (length version-separator))
 	   (string-equal (substring ver 0 (length version-separator))
 			 version-separator))
       (setq ver (concat "0" ver)))
+  (unless (string-match-p "^[0-9]" ver)
+    (error "Invalid version syntax: `%s' (must start with a number)" ver))
+
   (save-match-data
     (let ((i 0)
 	  (case-fold-search t)		; ignore case in matching
 	  lst s al)
+      ;; Parse the version-string up to a separator until there are none left
       (while (and (setq s (string-match "[0-9]+" ver i))
 		  (= s i))
-	;; handle numeric part
+        ;; Add the numeric part to the beginning of the version list;
+        ;; lst gets reversed at the end
 	(setq lst (cons (string-to-number (substring ver i (match-end 0)))
 			lst)
 	      i   (match-end 0))
@@ -4792,15 +4817,15 @@ See documentation for `version-separator' and `version-regexp-alist'."
 	      (setq al (cdr al)))
 	    (cond (al
 		   (push (cdar al) lst))
-		  ;; Convert 22.3a to 22.3.1, 22.3b to 22.3.2, etc.
-		  ((string-match "^[-_+ ]?\\([a-zA-Z]\\)$" s)
+        ;; Convert 22.3a to 22.3.1, 22.3b to 22.3.2, etc., but only if
+        ;; the letter is the end of the version-string, to avoid
+        ;; 22.8X3 being valid
+        ((and (string-match "^[-._+ ]?\\([a-zA-Z]\\)$" s)
+           (= i (length ver)))
 		   (push (- (aref (downcase (match-string 1 s)) 0) ?a -1)
 			 lst))
 		  (t (error "Invalid version syntax: `%s'" ver))))))
-      (if (null lst)
-	  (error "Invalid version syntax: `%s'" ver)
-	(nreverse lst)))))
-
+    (nreverse lst))))
 
 (defun version-list-< (l1 l2)
   "Return t if L1, a list specification of a version, is lower than L2.

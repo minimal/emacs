@@ -1,6 +1,6 @@
 ;;; term.el --- general command interpreter in a window stuff
 
-;; Copyright (C) 1988, 1990, 1992, 1994-1995, 2001-2015 Free Software
+;; Copyright (C) 1988, 1990, 1992, 1994-1995, 2001-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Per Bothner <per@bothner.com>
@@ -107,19 +107,6 @@
 ;; so easy you could do it yourself...
 ;;
 ;;  Blink, is not supported.  Currently it's mapped as bold.
-;;
-;;             ----------------------------------------
-;;
-;;  If you'd like to check out my complete configuration, you can download
-;; it from http://www.polito.it/~s64912/things.html, it's ~500k in size and
-;; contains my .cshrc, .emacs and my whole site-lisp subdirectory.  (notice
-;; that this term.el may be newer/older than the one in there, please
-;; check!)
-;;
-;;  This complete configuration contains, among other things, a complete
-;; rectangular marking solution (based on rect-mark.el and
-;; pc-bindings.el) and should be a good example of how extensively Emacs
-;; can be configured on a ppp-connected ws.
 ;;
 ;;             ----------------------------------------
 ;;
@@ -1445,7 +1432,7 @@ Using \"emacs\" loses, because bash disables editing if $TERM == emacs.")
 :UP=\\E[%%dA:DO=\\E[%%dB:LE=\\E[%%dD:RI=\\E[%%dC\
 :kl=\\EOD:kd=\\EOB:kr=\\EOC:ku=\\EOA:kN=\\E[6~:kP=\\E[5~:@7=\\E[4~:kh=\\E[1~\
 :mk=\\E[8m:cb=\\E[1K:op=\\E[39;49m:Co#8:pa#64:AB=\\E[4%%dm:AF=\\E[3%%dm:cr=^M\
-:bl=^G:do=^J:le=^H:ta=^I:se=\\E[27m:ue=\\E24m\
+:bl=^G:do=^J:le=^H:ta=^I:se=\\E[27m:ue=\\E[24m\
 :kb=^?:kD=^[[3~:sc=\\E7:rc=\\E8:r1=\\Ec:"
   ;; : -undefine ic
   ;; don't define :te=\\E[2J\\E[?47l\\E8:ti=\\E7\\E[?47h\
@@ -1467,6 +1454,13 @@ Using \"emacs\" loses, because bash disables editing if $TERM == emacs.")
 	   (format "TERMINFO=%s" data-directory)
 	   (format term-termcap-format "TERMCAP="
 		   term-term-name term-height term-width)
+
+	   ;; This is for backwards compatibility with Bash 4.3 and earlier.
+	   ;; Remove this hack once Bash 4.4-or-later is common, because
+	   ;; it breaks './configure' of some packages that expect it to
+	   ;; say where to find EMACS.
+	   (format "EMACS=%s (term:%s)" emacs-version term-protocol-version)
+
 	   (format "INSIDE_EMACS=%s,term:%s" emacs-version term-protocol-version)
 	   (format "LINES=%d" term-height)
 	   (format "COLUMNS=%d" term-width))
@@ -2140,7 +2134,7 @@ The prompt skip is done by skipping text matching the regular expression
 (defun term-read-noecho (prompt &optional stars)
   "Read a single line of text from user without echoing, and return it.
 Prompt with argument PROMPT, a string.  Optional argument STARS causes
-input to be echoed with '*' characters on the prompt line.  Input ends with
+input to be echoed with `*' characters on the prompt line.  Input ends with
 RET, LFD, or ESC.  DEL or C-h rubs out.  C-u kills line.  C-g aborts (if
 `inhibit-quit' is set because e.g. this function was called from a process
 filter and C-g is pressed, this function returns nil rather than a string).
@@ -4157,7 +4151,17 @@ the process.  Any more args are arguments to PROGRAM."
     ;; .emacs ...
     (term-set-escape-char ?\C-x))
 
-  (switch-to-buffer term-ansi-buffer-name))
+  (switch-to-buffer term-ansi-buffer-name)
+  ;; For some reason, without the below setting, ansi-term behaves
+  ;; sluggishly, not clear why, since the buffer is typically very
+  ;; small.
+  ;;
+  ;; There's a larger problem here with supporting bidirectional text:
+  ;; the application that writes to the terminal could have its own
+  ;; ideas about displaying bidirectional text, and might not want us
+  ;; reordering the text or deciding on base paragraph direction.  One
+  ;; such application is Emacs in TTY mode...  FIXME.
+  (setq bidi-paragraph-direction 'left-to-right))
 
 
 ;;; Serial terminals

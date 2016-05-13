@@ -1,13 +1,13 @@
 /* Generic frame functions.
 
-Copyright (C) 1993-1995, 1997, 1999-2015 Free Software Foundation, Inc.
+Copyright (C) 1993-1995, 1997, 1999-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -239,10 +239,10 @@ DEFUN ("framep", Fframep, Sframep, 1, 1, 0,
        doc: /* Return non-nil if OBJECT is a frame.
 Value is:
   t for a termcap frame (a character-only terminal),
- 'x' for an Emacs frame that is really an X window,
- 'w32' for an Emacs frame that is a window on MS-Windows display,
- 'ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
- 'pc' for a direct-write MS-DOS frame.
+ `x' for an Emacs frame that is really an X window,
+ `w32' for an Emacs frame that is a window on MS-Windows display,
+ `ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
+ `pc' for a direct-write MS-DOS frame.
 See also `frame-live-p'.  */)
   (Lisp_Object object)
 {
@@ -284,10 +284,10 @@ DEFUN ("window-system", Fwindow_system, Swindow_system, 0, 1, 0,
        doc: /* The name of the window system that FRAME is displaying through.
 The value is a symbol:
  nil for a termcap frame (a character-only terminal),
- 'x' for an Emacs frame that is really an X window,
- 'w32' for an Emacs frame that is a window on MS-Windows display,
- 'ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
- 'pc' for a direct-write MS-DOS frame.
+ `x' for an Emacs frame that is really an X window,
+ `w32' for an Emacs frame that is a window on MS-Windows display,
+ `ns' for an Emacs frame on a GNUstep or Macintosh Cocoa display,
+ `pc' for a direct-write MS-DOS frame.
 
 FRAME defaults to the currently selected frame.
 
@@ -866,6 +866,9 @@ make_initial_frame (void)
 
   /* The default value of menu-bar-mode is t.  */
   set_menu_bar_lines (f, make_number (1), Qnil);
+
+  /* Allocate glyph matrices.  */
+  adjust_frame_glyphs (f);
 
   if (!noninteractive)
     init_frame_faces (f);
@@ -2641,13 +2644,16 @@ If FRAME is nil, describe the currently selected frame.  */)
 
 DEFUN ("modify-frame-parameters", Fmodify_frame_parameters,
        Smodify_frame_parameters, 2, 2, 0,
-       doc: /* Modify the parameters of frame FRAME according to ALIST.
+       doc: /* Modify FRAME according to new values of its parameters in ALIST.
 If FRAME is nil, it defaults to the selected frame.
 ALIST is an alist of parameters to change and their new values.
 Each element of ALIST has the form (PARM . VALUE), where PARM is a symbol.
-The meaningful PARMs depend on the kind of frame.
-Undefined PARMs are ignored, but stored in the frame's parameter list
-so that `frame-parameters' will return them.
+Which PARMs are meaningful depends on the kind of frame.
+The meaningful parameters are acted upon, i.e. the frame is changed
+according to their new values, and are also stored in the frame's
+parameter list so that `frame-parameters' will return them.
+PARMs that are not meaningful are still stored in the frame's parameter
+list, but are otherwise ignored.
 
 The value of frame parameter FOO can also be accessed
 as a frame-local binding for the variable FOO, if you have
@@ -4559,7 +4565,7 @@ On Nextstep, this just calls `ns-parse-geometry'.  */)
 
    This function does not make the coordinates positive.  */
 
-#define DEFAULT_ROWS 35
+#define DEFAULT_ROWS 36
 #define DEFAULT_COLS 80
 
 long
@@ -5222,7 +5228,7 @@ keep it unchanged if this option is either t or a list containing
 `vertical-scroll-bars'.
 
 The default value is \\='(tool-bar-lines) on Lucid, Motif and Windows
-(which means that adding/removing a tool bar does not change the frame
+\(which means that adding/removing a tool bar does not change the frame
 height), nil on all other window systems including GTK+ (which means
 that changing any of the parameters listed above may change the size of
 the frame), and t otherwise (which means the frame size never changes

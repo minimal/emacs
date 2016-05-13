@@ -1,6 +1,6 @@
 ;;; help-fns.el --- Complex help functions -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1986, 1993-1994, 1998-2015 Free Software
+;; Copyright (C) 1985-1986, 1993-1994, 1998-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -296,7 +296,6 @@ suitable file is found, return nil."
 		      (substring-no-properties lib-name 0 -1)
 		    lib-name)
 		file-name))
-	     ;; The next three forms are from `find-source-lisp-file'.
 	     (src-file (locate-library file-name t nil 'readable)))
 	(and src-file (file-readable-p src-file) src-file))))))
 
@@ -763,8 +762,12 @@ it is displayed along with the global value."
 		(let ((from (point))
 		      (line-beg (line-beginning-position))
 		      (print-rep
-		       (let ((print-quoted t))
-			 (prin1-to-string val))))
+		       (let ((rep
+			      (let ((print-quoted t))
+				(prin1-to-string val))))
+			 (if (and (symbolp val) (not (booleanp val)))
+			     (format-message "`%s'" rep)
+			   rep))))
 		  (if (< (+ (length print-rep) (point) (- line-beg)) 68)
 		      (insert print-rep)
 		    (terpri)
@@ -990,7 +993,10 @@ file-local variable.\n")
 ;;;###autoload
 (defun describe-symbol (symbol &optional buffer frame)
   "Display the full documentation of SYMBOL.
-Will show the info of SYMBOL as a function, variable, and/or face."
+Will show the info of SYMBOL as a function, variable, and/or face.
+Optional arguments BUFFER and FRAME specify for which buffer and
+frame to show the information about SYMBOL; they default to the
+current buffer and the selected frame, respectively."
   (interactive
    (let* ((v-or-f (symbol-at-point))
           (found (cl-some (lambda (x) (funcall (nth 1 x) v-or-f))
@@ -1033,15 +1039,17 @@ Will show the info of SYMBOL as a function, variable, and/or face."
         (let ((inhibit-read-only t)
               (name (caar docs))        ;Name of doc currently at BOB.
               (doc (cdr (cadr docs))))  ;Doc to add at BOB.
-          (insert doc)
-          (delete-region (point) (progn (skip-chars-backward " \t\n") (point)))
-          (insert "\n\n"
-                  (eval-when-compile
-                    (propertize "\n" 'face '(:height 0.1 :inverse-video t)))
-                  "\n")
-          (when name
-            (insert (symbol-name symbol)
-                    " is also a " name "." "\n\n")))
+          (when doc
+            (insert doc)
+            (delete-region (point)
+                           (progn (skip-chars-backward " \t\n") (point)))
+            (insert "\n\n"
+                    (eval-when-compile
+                      (propertize "\n" 'face '(:height 0.1 :inverse-video t)))
+                    "\n")
+            (when name
+              (insert (symbol-name symbol)
+                      " is also a " name "." "\n\n"))))
         (setq docs (cdr docs)))
       (unless single
         ;; Don't record the `describe-variable' item in the stack.

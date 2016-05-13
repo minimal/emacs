@@ -1,6 +1,6 @@
 ;;; mule-cmds.el --- commands for multilingual environment  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1997-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2016 Free Software Foundation, Inc.
 ;; Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
 ;;   2005, 2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -34,8 +34,6 @@
 
 (defvar dos-codepage)
 (autoload 'widget-value "wid-edit")
-
-(defvar mac-system-coding-system)
 
 ;;; MULE related key bindings and menus.
 
@@ -2121,7 +2119,7 @@ See `set-language-info-alist' for use in programs."
       (with-current-buffer standard-output
 	(insert language-name " language environment\n\n")
 	(if (stringp doc)
-	    (insert doc "\n\n"))
+	    (insert (substitute-command-keys doc) "\n\n"))
 	(condition-case nil
 	    (let ((str (eval (get-language-info language-name 'sample-text))))
 	      (if (stringp str)
@@ -2937,11 +2935,18 @@ on encoding."
 	       (#xA000 . #xD7FF)
 	       ;; (#xD800 . #xFAFF) Surrogate/Private
 	       (#xFB00 . #x134FF)
-	       ;; (#x13500 . #x167FF) unused
-	       (#x16800 . #x16A3F)
-	       ;; (#x16A40 . #x1AFFF) unused
+	       ;; (#x13500 . #x143FF) unused
+               (#x14400 . #x14646)
+	       ;; (#x14647 . #x167FF) unused
+	       (#x16800 . #x16F9F)
+               (#x16FE0 . #x16FE0)
+               ;; (#x17000 . #x187FF) Tangut Ideographs
+               ;; (#x18800 . #x18AFF) Tangut Components
+	       ;; (#x18B00 . #x1AFFF) unused
 	       (#x1B000 . #x1B0FF)
-	       ;; (#x1B100 . #x1CFFF) unused
+	       ;; (#x1B100 . #x1BBFF) unused
+               (#x1BC00 . #x1BCAF)
+	       ;; (#x1BCB0 . #x1CFFF) unused
 	       (#x1D000 . #x1FFFF)
 	       ;; (#x20000 . #xDFFFF) CJK Ideograph Extension A, B, etc, unused
 	       (#xE0000 . #xE01FF)))

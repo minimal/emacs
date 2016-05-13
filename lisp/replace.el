@@ -1,6 +1,6 @@
 ;;; replace.el --- replace commands for Emacs
 
-;; Copyright (C) 1985-1987, 1992, 1994, 1996-1997, 2000-2015 Free
+;; Copyright (C) 1985-1987, 1992, 1994, 1996-1997, 2000-2016 Free
 ;; Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -34,9 +34,11 @@
   :group 'matching)
 
 (defcustom replace-character-fold nil
-  "Non-nil means `query-replace' should do character folding in matches.
+  "Non-nil means replacement commands should do character folding in matches.
 This means, for instance, that \\=' will match a large variety of
-unicode quotes."
+unicode quotes.
+This variable affects `query-replace' and `replace-string', but not
+`replace-regexp'."
   :type 'boolean
   :group 'matching
   :version "25.1")
@@ -83,7 +85,7 @@ from Isearch by using a key sequence like `C-s C-s M-%'." "24.3")
   ;; while preparing to dump, also stops customize-rogue listing this.
   :initialize 'custom-initialize-delay
   :group 'matching
-  :type 'sexp
+  :type '(choice string (sexp :tag "Display specification"))
   :version "25.1")
 
 (defcustom query-replace-from-history-variable 'query-replace-history
@@ -111,7 +113,8 @@ strings or patterns."
   :version "22.1")
 
 (defcustom query-replace-show-replacement t
-  "Non-nil means to show what actual replacement text will be."
+  "Non-nil means show substituted replacement text in the minibuffer.
+This variable affects only `query-replace-regexp'."
   :type 'boolean
   :group 'matching
   :version "23.1")
@@ -164,8 +167,6 @@ wants to replace FROM with TO."
     ;; unavailable while preparing to dump.
     (custom-reevaluate-setting 'query-replace-from-to-separator)
     (let* ((history-add-new-input nil)
-	   (text-property-default-nonsticky
-	    (cons '(separator . t) text-property-default-nonsticky))
 	   (separator
 	    (when query-replace-from-to-separator
 	      (propertize "\0"
@@ -190,11 +191,18 @@ wants to replace FROM with TO."
 	    ;; a region in order to specify the minibuffer input.
 	    ;; That should not clobber the region for the query-replace itself.
 	    (save-excursion
-	      (if regexp-flag
-		  (read-regexp prompt nil 'query-replace-from-to-history)
-		(read-from-minibuffer
-		 prompt nil nil nil 'query-replace-from-to-history
-		 (car (if regexp-flag regexp-search-ring search-ring)) t))))
+              ;; The `with-current-buffer' ensures that the binding
+              ;; for `text-property-default-nonsticky' isn't a buffer
+              ;; local binding in the current buffer, which
+              ;; `read-from-minibuffer' wouldn't see.
+              (with-current-buffer (window-buffer (minibuffer-window))
+                (let ((text-property-default-nonsticky
+                       (cons '(separator . t) text-property-default-nonsticky)))
+                  (if regexp-flag
+                      (read-regexp prompt nil 'query-replace-from-to-history)
+                    (read-from-minibuffer
+                     prompt nil nil nil 'query-replace-from-to-history
+                     (car (if regexp-flag regexp-search-ring search-ring)) t))))))
            (to))
       (if (and (zerop (length from)) query-replace-defaults)
 	  (cons (caar query-replace-defaults)
@@ -284,13 +292,14 @@ the original string if not."
 	  (and current-prefix-arg (not (eq current-prefix-arg '-)))
 	  (and current-prefix-arg (eq current-prefix-arg '-)))))
 
-(defun query-replace (from-string to-string &optional delimited start end backward)
+(defun query-replace (from-string to-string &optional delimited start end backward region-noncontiguous-p)
   "Replace some occurrences of FROM-STRING with TO-STRING.
 As each match is found, the user must type a character saying
 what to do with it.  For directions, type \\[help-command] at that time.
 
 In Transient Mark mode, if the mark is active, operate on the contents
-of the region.  Otherwise, operate from point to the end of the buffer.
+of the region.  Otherwise, operate from point to the end of the buffer's
+accessible portion.
 
 Use \\<minibuffer-local-map>\\[next-history-element] \
 to pull the last incremental search string to the minibuffer
@@ -314,6 +323,10 @@ If `replace-lax-whitespace' is non-nil, a space or spaces in the string
 to be replaced will match a sequence of whitespace chars defined by the
 regexp in `search-whitespace-regexp'.
 
+If `replace-character-fold' is non-nil, matching uses character folding,
+i.e. it ignores diacritics and other differences between equivalent
+character strings.
+
 Third arg DELIMITED (prefix arg if interactive), if non-nil, means replace
 only matches surrounded by word boundaries.  A negative prefix arg means
 replace backward.
@@ -328,28 +341,28 @@ To customize possible responses, change the bindings in `query-replace-map'."
 		   (if current-prefix-arg
 		       (if (eq current-prefix-arg '-) " backward" " word")
 		     "")
-		   (if (and transient-mark-mode mark-active) " in region" ""))
+		   (if (use-region-p) " in region" ""))
 	   nil)))
      (list (nth 0 common) (nth 1 common) (nth 2 common)
 	   ;; These are done separately here
 	   ;; so that command-history will record these expressions
 	   ;; rather than the values they had this time.
-	   (if (and transient-mark-mode mark-active)
-	       (region-beginning))
-	   (if (and transient-mark-mode mark-active)
-	       (region-end))
-	   (nth 3 common))))
-  (perform-replace from-string to-string t nil delimited nil nil start end backward))
+	   (if (use-region-p) (region-beginning))
+	   (if (use-region-p) (region-end))
+	   (nth 3 common)
+	   (if (use-region-p) (region-noncontiguous-p)))))
+  (perform-replace from-string to-string t nil delimited nil nil start end backward region-noncontiguous-p))
 
 (define-key esc-map "%" 'query-replace)
 
-(defun query-replace-regexp (regexp to-string &optional delimited start end backward)
+(defun query-replace-regexp (regexp to-string &optional delimited start end backward region-noncontiguous-p)
   "Replace some things after point matching REGEXP with TO-STRING.
 As each match is found, the user must type a character saying
 what to do with it.  For directions, type \\[help-command] at that time.
 
 In Transient Mark mode, if the mark is active, operate on the contents
-of the region.  Otherwise, operate from point to the end of the buffer.
+of the region.  Otherwise, operate from point to the end of the buffer's
+accessible portion.
 
 Use \\<minibuffer-local-map>\\[next-history-element] \
 to pull the last incremental search regexp to the minibuffer
@@ -372,6 +385,8 @@ matches using `isearch-filter-predicate'.
 If `replace-regexp-lax-whitespace' is non-nil, a space or spaces in the regexp
 to be replaced will match a sequence of whitespace chars defined by the
 regexp in `search-whitespace-regexp'.
+
+This function is not affected by `replace-character-fold'.
 
 Third arg DELIMITED (prefix arg if interactive), if non-nil, means replace
 only matches surrounded by word boundaries.  A negative prefix arg means
@@ -408,18 +423,17 @@ Use \\[repeat-complex-command] after this command for details."
 		       (if (eq current-prefix-arg '-) " backward" " word")
 		     "")
 		   " regexp"
-		   (if (and transient-mark-mode mark-active) " in region" ""))
+		   (if (use-region-p) " in region" ""))
 	   t)))
      (list (nth 0 common) (nth 1 common) (nth 2 common)
 	   ;; These are done separately here
 	   ;; so that command-history will record these expressions
 	   ;; rather than the values they had this time.
-	   (if (and transient-mark-mode mark-active)
-	       (region-beginning))
-	   (if (and transient-mark-mode mark-active)
-	       (region-end))
-	   (nth 3 common))))
-  (perform-replace regexp to-string t t delimited nil nil start end backward))
+	   (if (use-region-p) (region-beginning))
+	   (if (use-region-p) (region-end))
+	   (nth 3 common)
+	   (if (use-region-p) (region-noncontiguous-p)))))
+  (perform-replace regexp to-string t t delimited nil nil start end backward region-noncontiguous-p))
 
 (define-key esc-map [?\C-%] 'query-replace-regexp)
 
@@ -445,7 +459,8 @@ Use `\\#&' or `\\#N' if you want a number instead of a string.
 In interactive use, `\\#' in itself stands for `replace-count'.
 
 In Transient Mark mode, if the mark is active, operate on the contents
-of the region.  Otherwise, operate from point to the end of the buffer.
+of the region.  Otherwise, operate from point to the end of the buffer's
+accessible portion.
 
 Use \\<minibuffer-local-map>\\[next-history-element] \
 to pull the last incremental search regexp to the minibuffer
@@ -461,6 +476,8 @@ matches using `isearch-filter-predicate'.
 If `replace-regexp-lax-whitespace' is non-nil, a space or spaces in the regexp
 to be replaced will match a sequence of whitespace chars defined by the
 regexp in `search-whitespace-regexp'.
+
+This function is not affected by `replace-character-fold'.
 
 Third arg DELIMITED (prefix arg if interactive), if non-nil, means replace
 only matches that are surrounded by word boundaries.
@@ -485,10 +502,8 @@ for Lisp calls." "22.1"))
        ;; and the user might enter a single token.
        (replace-match-string-symbols to)
        (list from (car to) current-prefix-arg
-	     (if (and transient-mark-mode mark-active)
-		 (region-beginning))
-	     (if (and transient-mark-mode mark-active)
-		 (region-end))))))
+	     (if (use-region-p) (region-beginning))
+	     (if (use-region-p) (region-end))))))
   (perform-replace regexp (cons 'replace-eval-replacement to-expr)
 		   t 'literal delimited nil nil start end))
 
@@ -500,7 +515,8 @@ each successive replacement uses the next successive replacement string,
 wrapping around from the last such string to the first.
 
 In Transient Mark mode, if the mark is active, operate on the contents
-of the region.  Otherwise, operate from point to the end of the buffer.
+of the region.  Otherwise, operate from point to the end of the buffer's
+accessible portion.
 
 Non-interactively, TO-STRINGS may be a list of replacement strings.
 
@@ -523,10 +539,8 @@ Fourth and fifth arg START and END specify the region to operate on."
      (list from to
 	   (and current-prefix-arg
 		(prefix-numeric-value current-prefix-arg))
-	   (if (and transient-mark-mode mark-active)
-	       (region-beginning))
-	   (if (and transient-mark-mode mark-active)
-	       (region-end)))))
+	   (if (use-region-p) (region-beginning))
+	   (if (use-region-p) (region-end)))))
   (let (replacements)
     (if (listp to-strings)
 	(setq replacements to-strings)
@@ -557,6 +571,10 @@ If `replace-lax-whitespace' is non-nil, a space or spaces in the string
 to be replaced will match a sequence of whitespace chars defined by the
 regexp in `search-whitespace-regexp'.
 
+If `replace-character-fold' is non-nil, matching uses character folding,
+i.e. it ignores diacritics and other differences between equivalent
+character strings.
+
 Third arg DELIMITED (prefix arg if interactive), if non-nil, means replace
 only matches surrounded by word boundaries.  A negative prefix arg means
 replace backward.
@@ -564,7 +582,7 @@ replace backward.
 Operates on the region between START and END (if both are nil, from point
 to the end of the buffer).  Interactively, if Transient Mark mode is
 enabled and the mark is active, operates on the contents of the region;
-otherwise from point to the end of the buffer.
+otherwise from point to the end of the buffer's accessible portion.
 
 Use \\<minibuffer-local-map>\\[next-history-element] \
 to pull the last incremental search string to the minibuffer
@@ -587,13 +605,11 @@ and TO-STRING is also null.)"
 		       (if (eq current-prefix-arg '-) " backward" " word")
 		     "")
 		   " string"
-		   (if (and transient-mark-mode mark-active) " in region" ""))
+		   (if (use-region-p) " in region" ""))
 	   nil)))
      (list (nth 0 common) (nth 1 common) (nth 2 common)
-	   (if (and transient-mark-mode mark-active)
-	       (region-beginning))
-	   (if (and transient-mark-mode mark-active)
-	       (region-end))
+	   (if (use-region-p) (region-beginning))
+	   (if (use-region-p) (region-end))
 	   (nth 3 common))))
   (perform-replace from-string to-string nil nil delimited nil nil start end backward))
 
@@ -610,8 +626,11 @@ If `replace-regexp-lax-whitespace' is non-nil, a space or spaces in the regexp
 to be replaced will match a sequence of whitespace chars defined by the
 regexp in `search-whitespace-regexp'.
 
+This function is not affected by `replace-character-fold'
+
 In Transient Mark mode, if the mark is active, operate on the contents
-of the region.  Otherwise, operate from point to the end of the buffer.
+of the region.  Otherwise, operate from point to the end of the buffer's
+accessible portion.
 
 Third arg DELIMITED (prefix arg if interactive), if non-nil, means replace
 only matches surrounded by word boundaries.  A negative prefix arg means
@@ -661,13 +680,11 @@ which will run faster and will not set the mark or print anything."
 		       (if (eq current-prefix-arg '-) " backward" " word")
 		     "")
 		   " regexp"
-		   (if (and transient-mark-mode mark-active) " in region" ""))
+		   (if (use-region-p) " in region" ""))
 	   t)))
      (list (nth 0 common) (nth 1 common) (nth 2 common)
-	   (if (and transient-mark-mode mark-active)
-	       (region-beginning))
-	   (if (and transient-mark-mode mark-active)
-	       (region-end))
+	   (if (use-region-p) (region-beginning))
+	   (if (use-region-p) (region-end))
 	   (nth 3 common))))
   (perform-replace regexp to-string nil t delimited nil nil start end backward))
 
@@ -832,7 +849,7 @@ a previously found match."
 		  (unless (or (bolp) (eobp))
 		    (forward-line 0))
 		  (point-marker)))))
-    (if (and interactive transient-mark-mode mark-active)
+    (if (and interactive (use-region-p))
 	(setq rstart (region-beginning)
 	      rend (progn
 		     (goto-char (region-end))
@@ -901,7 +918,7 @@ starting on the same line at which another match ended is ignored."
       (progn
 	(goto-char (min rstart rend))
 	(setq rend (copy-marker (max rstart rend))))
-    (if (and interactive transient-mark-mode mark-active)
+    (if (and interactive (use-region-p))
 	(setq rstart (region-beginning)
 	      rend (copy-marker (region-end)))
       (setq rstart (point)
@@ -951,7 +968,7 @@ a previously found match."
               (setq rend (max rstart rend)))
           (goto-char rstart)
           (setq rend (point-max)))
-      (if (and interactive transient-mark-mode mark-active)
+      (if (and interactive (use-region-p))
 	  (setq rstart (region-beginning)
 		rend (region-end))
 	(setq rstart (point)
@@ -1261,6 +1278,7 @@ Compatibility function for \\[next-error] invocations."
     (t :background "gray"))
   "Face used to highlight matches permanently."
   :group 'matching
+  :group 'basic-faces
   :version "22.1")
 
 (defcustom list-matching-lines-default-context-lines 0
@@ -1426,6 +1444,17 @@ See also `multi-occur'."
 			       buf))
 			   (buffer-list))))))
 
+(defun occur-regexp-descr (regexp)
+  (format " for %s\"%s\""
+          (or (get-text-property 0 'isearch-regexp-function-descr regexp)
+              "")
+          (if (get-text-property 0 'isearch-string regexp)
+              (propertize
+               (query-replace-descr
+                (get-text-property 0 'isearch-string regexp))
+               'help-echo regexp)
+            (query-replace-descr regexp))))
+
 (defun occur-1 (regexp nlines bufs &optional buf-name)
   (unless (and regexp (not (equal regexp "")))
     (error "Occur doesn't work with the empty regexp"))
@@ -1494,9 +1523,11 @@ See also `multi-occur'."
 		     (if (= count 1) "" "es")
 		     ;; Don't display regexp if with remaining text
 		     ;; it is longer than window-width.
-		     (if (> (+ (length regexp) 42) (window-width))
-			 "" (format-message
-                             " for `%s'" (query-replace-descr regexp)))))
+		     (if (> (+ (length (or (get-text-property 0 'isearch-string regexp)
+					   regexp))
+			       42)
+			    (window-width))
+			 "" (occur-regexp-descr regexp))))
 	  (setq occur-revert-arguments (list regexp nlines bufs))
           (if (= count 0)
               (kill-buffer occur-buf)
@@ -1557,6 +1588,9 @@ See also `multi-occur'."
 		    ;; Highlight the matches
 		    (let ((len (length curstring))
 			  (start 0))
+		      ;; Count empty lines that don't use next loop (Bug#22062).
+		      (when (zerop len)
+			(setq matches (1+ matches)))
 		      (while (and (< start len)
 				  (string-match regexp curstring start))
 			(setq matches (1+ matches))
@@ -1657,8 +1691,7 @@ See also `multi-occur'."
 						  lines (if (= lines 1) "" "s")))
 				   ;; Don't display regexp for multi-buffer.
 				   (if (> (length buffers) 1)
-				       "" (format " for \"%s\""
-						  (query-replace-descr regexp)))
+				       "" (occur-regexp-descr regexp))
 				   (buffer-name buf))
 			   'read-only t))
 		  (setq end (point))
@@ -1671,14 +1704,14 @@ See also `multi-occur'."
 	(goto-char (point-min))
 	(let ((beg (point))
 	      end)
-	  (insert (format "%d match%s%s total for \"%s\":\n"
+	  (insert (format "%d match%s%s total%s:\n"
 			  global-matches (if (= global-matches 1) "" "es")
 			  ;; Don't display the same number of lines
 			  ;; and matches in case of 1 match per line.
 			  (if (= global-lines global-matches)
 			      "" (format " in %d line%s"
 					 global-lines (if (= global-lines 1) "" "s")))
-			  (query-replace-descr regexp)))
+			  (occur-regexp-descr regexp)))
 	  (setq end (point))
 	  (when title-face
 	    (add-face-text-property beg end title-face)))
@@ -1958,13 +1991,15 @@ but coerced to the correct value of INTEGERS."
 		  new)))
       (match-data integers reuse t)))
 
-(defun replace-match-maybe-edit (newtext fixedcase literal noedit match-data backward)
+(defun replace-match-maybe-edit (newtext fixedcase literal noedit match-data
+                                 &optional backward)
   "Make a replacement with `replace-match', editing `\\?'.
 FIXEDCASE, LITERAL are passed to `replace-match' (which see).
 After possibly editing it (if `\\?' is present), NEWTEXT is also
 passed to `replace-match'.  If NOEDIT is true, no check for `\\?'
 is made (to save time).  MATCH-DATA is used for the replacement.
-In case editing is done, it is changed to use markers.
+In case editing is done, it is changed to use markers.  BACKWARD is
+used to reverse the replacement direction.
 
 The return value is non-nil if there has been no `\\?' or NOEDIT was
 passed in.  If LITERAL is set, no checking is done, anyway."
@@ -1989,6 +2024,9 @@ passed in.  If LITERAL is set, no checking is done, anyway."
   (when backward (goto-char (nth 0 match-data)))
   noedit)
 
+(defvar replace-update-post-hook nil
+  "Function(s) to call after query-replace has found a match in the buffer.")
+
 (defvar replace-search-function nil
   "Function to use when searching for strings to replace.
 It is used by `query-replace' and `replace-string', and is called
@@ -2002,7 +2040,7 @@ It is called with three arguments, as if it were
 `re-search-forward'.")
 
 (defun replace-search (search-string limit regexp-flag delimited-flag
-				     case-fold-search backward)
+		       case-fold-search &optional backward)
   "Search for the next occurrence of SEARCH-STRING to replace."
   ;; Let-bind global isearch-* variables to values used
   ;; to search the next replacement.  These let-bindings
@@ -2036,7 +2074,7 @@ It is called with three arguments, as if it were
 
 (defun replace-highlight (match-beg match-end range-beg range-end
 			  search-string regexp-flag delimited-flag
-			  case-fold-search backward)
+			  case-fold-search &optional backward)
   (if query-replace-highlight
       (if replace-overlay
 	  (move-overlay replace-overlay match-beg match-end (current-buffer))
@@ -2068,7 +2106,7 @@ It is called with three arguments, as if it were
 
 (defun perform-replace (from-string replacements
 		        query-flag regexp-flag delimited-flag
-			&optional repeat-count map start end backward)
+			&optional repeat-count map start end backward region-noncontiguous-p)
   "Subroutine of `query-replace'.  Its complexity handles interactive queries.
 Don't use this in your own program unless you want to query and set the mark
 just as `query-replace' does.  Instead, write a simple loop like this:
@@ -2115,6 +2153,9 @@ It must return a string."
 
          ;; If non-nil, it is marker saying where in the buffer to stop.
          (limit nil)
+         ;; Use local binding in add-function below.
+         (isearch-filter-predicate isearch-filter-predicate)
+         (region-bounds nil)
 
          ;; Data for the next match.  If a cons, it has the same format as
          ;; (match-data); otherwise it is t if a match is possible at point.
@@ -2126,6 +2167,24 @@ It must return a string."
                      (substitute-command-keys
                       "Query replacing %s with %s: (\\<query-replace-map>\\[help] for help) ")
                      minibuffer-prompt-properties))))
+
+    ;; Unless a single contiguous chunk is selected, operate on multiple chunks.
+    (when region-noncontiguous-p
+      (setq region-bounds
+            (mapcar (lambda (position)
+                      (cons (copy-marker (car position))
+                            (copy-marker (cdr position))))
+                    (funcall region-extract-function 'bounds)))
+      (add-function :after-while isearch-filter-predicate
+                    (lambda (start end)
+                      (delq nil (mapcar
+                                 (lambda (bounds)
+                                   (and
+                                    (>= start (car bounds))
+                                    (<= start (cdr bounds))
+                                    (>= end   (car bounds))
+                                    (<= end   (cdr bounds))))
+                                 region-bounds)))))
 
     ;; If region is active, in Transient Mark mode, operate on region.
     (if backward
@@ -2221,7 +2280,7 @@ It must return a string."
 		(and nonempty-match
 		     (or (not regexp-flag)
 			 (and (if backward
-				  (looking-back search-string)
+				  (looking-back search-string nil)
 				(looking-at search-string))
 			      (let ((match (match-data)))
 				(and (/= (nth 0 match) (nth 1 match))
@@ -2275,7 +2334,8 @@ It must return a string."
 		;; `real-match-data'.
 		(while (not done)
 		  (set-match-data real-match-data)
-		  (replace-highlight
+                  (run-hooks 'replace-update-post-hook) ; Before `replace-highlight'.
+                  (replace-highlight
 		   (match-beginning 0) (match-end 0)
 		   start end search-string
 		   regexp-flag delimited-flag case-fold-search backward)

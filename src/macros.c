@@ -1,13 +1,13 @@
 /* Keyboard macros.
 
-Copyright (C) 1985-1986, 1993, 2000-2015 Free Software Foundation, Inc.
+Copyright (C) 1985-1986, 1993, 2000-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -184,16 +184,11 @@ store_kbd_macro_char (Lisp_Object c)
     {
       if (kb->kbd_macro_ptr - kb->kbd_macro_buffer == kb->kbd_macro_bufsize)
 	{
-	  ptrdiff_t ptr_offset, end_offset, nbytes;
-
-	  ptr_offset = kb->kbd_macro_ptr - kb->kbd_macro_buffer;
-	  end_offset = kb->kbd_macro_end - kb->kbd_macro_buffer;
-	  if (min (PTRDIFF_MAX, SIZE_MAX) / sizeof *kb->kbd_macro_buffer / 2
-	      < kb->kbd_macro_bufsize)
-	    memory_full (SIZE_MAX);
-	  nbytes = kb->kbd_macro_bufsize * (2 * sizeof *kb->kbd_macro_buffer);
-	  kb->kbd_macro_buffer = xrealloc (kb->kbd_macro_buffer, nbytes);
-	  kb->kbd_macro_bufsize *= 2;
+	  ptrdiff_t ptr_offset = kb->kbd_macro_ptr - kb->kbd_macro_buffer;
+	  ptrdiff_t end_offset = kb->kbd_macro_end - kb->kbd_macro_buffer;
+	  kb->kbd_macro_buffer = xpalloc (kb->kbd_macro_buffer,
+					  &kb->kbd_macro_bufsize,
+					  1, -1, sizeof *kb->kbd_macro_buffer);
 	  kb->kbd_macro_ptr = kb->kbd_macro_buffer + ptr_offset;
 	  kb->kbd_macro_end = kb->kbd_macro_buffer + end_offset;
 	}

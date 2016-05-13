@@ -1,6 +1,6 @@
 ;;; mule.el --- basic commands for multilingual environment
 
-;; Copyright (C) 1997-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-2016 Free Software Foundation, Inc.
 ;; Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
 ;;   2005, 2006, 2007, 2008, 2009, 2010, 2011
 ;;   National Institute of Advanced Industrial Science and Technology (AIST)
@@ -1445,42 +1445,35 @@ graphical terminals."
   (let ((coding-type (coding-system-type coding-system))
 	(saved-meta-mode
 	 (terminal-parameter terminal 'keyboard-coding-saved-meta-mode)))
-    (if (not (eq coding-type 'raw-text))
-	(let (accept-8-bit)
-	  (if (not (or (coding-system-get coding-system :suitable-for-keyboard)
-		       (coding-system-get coding-system :ascii-compatible-p)))
-	      (error "Unsuitable coding system for keyboard: %s" coding-system))
-	  (cond ((memq coding-type '(charset utf-8 shift-jis big5 ccl))
-		 (setq accept-8-bit t))
-		((eq coding-type 'iso-2022)
-		 (let ((flags (coding-system-get coding-system :flags)))
-		   (or (memq '7-bit flags)
-		       (setq accept-8-bit t))))
-		(t
-		 (error "Unsupported coding system for keyboard: %s"
-			coding-system)))
-	  (if accept-8-bit
-	      (progn
-		(or saved-meta-mode
-		    (set-terminal-parameter terminal
-					    'keyboard-coding-saved-meta-mode
-					    (cons (nth 2 (current-input-mode))
-						  nil)))
-		(set-input-meta-mode 8 terminal))
-	    (when saved-meta-mode
-	      (set-input-meta-mode (car saved-meta-mode) terminal)
-	      (set-terminal-parameter terminal
-				      'keyboard-coding-saved-meta-mode
-				      nil)))
-	  ;; Avoid end-of-line conversion.
-	  (setq coding-system
-		(coding-system-change-eol-conversion coding-system 'unix)))
-
-      (when saved-meta-mode
-	(set-input-meta-mode (car saved-meta-mode) terminal)
-	(set-terminal-parameter terminal
-				'keyboard-coding-saved-meta-mode
-				nil))))
+    (let (accept-8-bit)
+      (if (not (or (coding-system-get coding-system :suitable-for-keyboard)
+                   (coding-system-get coding-system :ascii-compatible-p)))
+          (error "Unsuitable coding system for keyboard: %s" coding-system))
+      (cond ((memq coding-type '(raw-text charset utf-8 shift-jis big5 ccl))
+             (setq accept-8-bit t))
+            ((eq coding-type 'iso-2022)
+             (let ((flags (coding-system-get coding-system :flags)))
+               (or (memq '7-bit flags)
+                   (setq accept-8-bit t))))
+            (t
+             (error "Unsupported coding system for keyboard: %s"
+                    coding-system)))
+      (if accept-8-bit
+          (progn
+            (or saved-meta-mode
+                (set-terminal-parameter terminal
+                                        'keyboard-coding-saved-meta-mode
+                                        (cons (nth 2 (current-input-mode))
+                                              nil)))
+            (set-input-meta-mode 8 terminal))
+        (when saved-meta-mode
+          (set-input-meta-mode (car saved-meta-mode) terminal)
+          (set-terminal-parameter terminal
+                                  'keyboard-coding-saved-meta-mode
+                                  nil)))
+      ;; Avoid end-of-line conversion.
+      (setq coding-system
+            (coding-system-change-eol-conversion coding-system 'unix))))
   (set-keyboard-coding-system-internal coding-system terminal)
   (setq keyboard-coding-system coding-system))
 

@@ -1,6 +1,6 @@
 ;;; etags.el --- etags facility for Emacs  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1986, 1988-1989, 1992-1996, 1998, 2000-2015 Free
+;; Copyright (C) 1985-1986, 1988-1989, 1992-1996, 1998, 2000-2016 Free
 ;; Software Foundation, Inc.
 
 ;; Author: Roland McGrath <roland@gnu.org>
@@ -799,13 +799,12 @@ If no tags table is loaded, do nothing and return nil."
     (let ((completion-ignore-case (if (memq tags-case-fold-search '(t nil))
 				      tags-case-fold-search
 				    case-fold-search))
-	  (pattern (funcall (or find-tag-default-function
-				(get major-mode 'find-tag-default-function)
-				#'find-tag-default)))
+	  (pattern (find-tag--default))
 	  beg)
       (when pattern
 	(save-excursion
-          (forward-char (1- (length pattern)))
+          ;; Avoid end-of-buffer error.
+          (goto-char (+ (point) (length pattern) -1))
           ;; The find-tag function might be overly optimistic.
           (when (search-backward pattern nil t)
             (setq beg (point))
@@ -817,9 +816,7 @@ If no tags table is loaded, do nothing and return nil."
   (let* ((completion-ignore-case (if (memq tags-case-fold-search '(t nil))
 				     tags-case-fold-search
 				   case-fold-search))
-	 (default (funcall (or find-tag-default-function
-			       (get major-mode 'find-tag-default-function)
-			       'find-tag-default)))
+	 (default (find-tag--default))
 	 (spec (completing-read (if default
 				    (format "%s (default %s): "
 					    (substring string 0 (string-match "[ :]+\\'" string))
@@ -830,6 +827,11 @@ If no tags table is loaded, do nothing and return nil."
     (if (equal spec "")
 	(or default (user-error "There is no default tag"))
       spec)))
+
+(defun find-tag--default ()
+  (funcall (or find-tag-default-function
+               (get major-mode 'find-tag-default-function)
+               'find-tag-default)))
 
 (defvar last-tag nil
   "Last tag found by \\[find-tag].")
@@ -1259,24 +1261,21 @@ buffer-local values of tags table format variables."
 	  (point-min) (point-max))))
     (save-excursion
       (goto-char (point-min))
-      ;; This monster regexp matches an etags tag line.
-      ;;   \1 is the string to match;
-      ;;   \2 is not interesting;
-      ;;   \3 is the guessed tag name; XXX guess should be better eg DEFUN
-      ;;   \4 is not interesting;
-      ;;   \5 is the explicitly-specified tag name.
-      ;;   \6 is the line to start searching at;
-      ;;   \7 is the char to start searching at.
+      ;; This regexp matches an explicit tag name or the place where
+      ;; it would start.
       (while (re-search-forward
-	      "^\\(\\([^\177]*[^-a-zA-Z0-9_+*$:\177]+\\)?\
-\\([-a-zA-Z0-9_+*$?:]+\\)[^-a-zA-Z0-9_+*$?:\177]*\\)\177\
-\\(\\([^\n\001]+\\)\001\\)?\\([0-9]+\\)?,\\([0-9]+\\)?\n"
+              "[\f\t\n\r()=,; ]?\177\\\(?:\\([^\n\001]+\\)\001\\)?"
 	      nil t)
-	(push	(prog1 (if (match-beginning 5)
+	(push	(prog1 (if (match-beginning 1)
 			   ;; There is an explicit tag name.
-			   (buffer-substring (match-beginning 5) (match-end 5))
-			 ;; No explicit tag name.  Best guess.
-			 (buffer-substring (match-beginning 3) (match-end 3)))
+			   (buffer-substring (match-beginning 1) (match-end 1))
+			 ;; No explicit tag name.  Backtrack a little,
+                         ;; and look for the implicit one.
+                         (goto-char (match-beginning 0))
+                         (skip-chars-backward "^\f\t\n\r()=,; ")
+                         (prog1
+                             (buffer-substring (point) (match-beginning 0))
+                           (goto-char (match-end 0))))
 		  (progress-reporter-update progress-reporter (point)))
 		table)))
     table))
@@ -1795,7 +1794,6 @@ Two variables control the processing we do on each file: the value of
 interesting (it returns non-nil if so) and `tags-loop-operate' is a form to
 evaluate to operate on an interesting file.  If the latter evaluates to
 nil, we exit; otherwise we scan the next file."
-  (declare (obsolete "use `xref-find-definitions' interface instead." "25.1"))
   (interactive)
   (let (new
 	;; Non-nil means we have finished one file
@@ -2084,24 +2082,25 @@ for \\[find-tag] (which see)."
 
 (defvar etags-xref-find-definitions-tag-order '(tag-exact-match-p
                                                 tag-implicit-name-match-p)
-  "Tag order used in `etags-xref-find' to look for definitions.")
+  "Tag order used in `xref-backend-definitions' to look for definitions.")
 
 ;;;###autoload
-(defun etags-xref-find (action id)
-  (pcase action
-    (`definitions (etags--xref-find-definitions id))
-    (`references  (etags--xref-find-references id))
-    (`apropos (etags--xref-find-definitions id t))))
+(defun etags--xref-backend () 'etags)
 
-(defun etags--xref-find-references (symbol)
-  ;; TODO: Merge together with the Elisp impl.
-  (cl-mapcan
-   (lambda (dir)
-     (xref-collect-references symbol dir))
-   (project-search-path (project-current))))
+(cl-defmethod xref-backend-identifier-at-point ((_backend (eql etags)))
+  (find-tag--default))
+
+(cl-defmethod xref-backend-identifier-completion-table ((_backend (eql etags)))
+  (tags-lazy-completion-table))
+
+(cl-defmethod xref-backend-definitions ((_backend (eql etags)) symbol)
+  (etags--xref-find-definitions symbol))
+
+(cl-defmethod xref-backend-apropos ((_backend (eql etags)) symbol)
+  (etags--xref-find-definitions symbol t))
 
 (defun etags--xref-find-definitions (pattern &optional regexp?)
-  ;; This emulates the behaviour of `find-tag-in-order' but instead of
+  ;; This emulates the behavior of `find-tag-in-order' but instead of
   ;; returning one match at a time all matches are returned as list.
   ;; NOTE: find-tag-tag-order is typically a buffer-local variable.
   (let* ((xrefs '())
@@ -2153,9 +2152,6 @@ for \\[find-tag] (which see)."
 (cl-defmethod xref-location-line ((l xref-etags-location))
   (with-slots (tag-info) l
     (nth 1 tag-info)))
-
-(defun etags-search-path ()
-  (mapcar #'file-name-directory tags-table-list))
 
 
 (provide 'etags)

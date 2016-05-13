@@ -1,6 +1,6 @@
 ;;; font-lock.el --- Electric font lock mode
 
-;; Copyright (C) 1992-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992-2016 Free Software Foundation, Inc.
 
 ;; Author: Jamie Zawinski
 ;;	Richard Stallman
@@ -763,7 +763,7 @@ see the variables `c-font-lock-extra-types', `c++-font-lock-extra-types',
 	      (setq font-lock-removed-keywords-alist
 		    (delq cell font-lock-removed-keywords-alist)))))))
 
-;; Written by Anders Lindgren <andersl@andersl.com>.
+;; Written by Anders Lindgren
 ;;
 ;; Case study:
 ;; (I)  The keywords are removed from a major mode.
@@ -1065,7 +1065,8 @@ Called with two arguments BEG and END.")
 
 (defun font-lock-flush (&optional beg end)
   "Declare the region BEG...END's fontification as out-of-date.
-If the region is not specified, it defaults to the whole buffer."
+If the region is not specified, it defaults to the entire
+accessible portion of the current buffer."
   (and font-lock-mode
        font-lock-fontified
        (funcall font-lock-flush-function
@@ -1073,13 +1074,20 @@ If the region is not specified, it defaults to the whole buffer."
 
 (defvar font-lock-ensure-function
   (lambda (_beg _end)
-    (unless font-lock-fontified (font-lock-default-fontify-buffer)))
+    (unless font-lock-fontified
+      (font-lock-default-fontify-buffer)
+      (unless font-lock-mode
+        ;; If font-lock is not enabled, we don't have the hooks in place to
+        ;; track modifications, so a subsequent call to font-lock-ensure can't
+        ;; assume that the fontification is still valid.
+        (setq font-lock-fontified nil))))
   "Function to make sure a region has been fontified.
 Called with two arguments BEG and END.")
 
 (defun font-lock-ensure (&optional beg end)
   "Make sure the region BEG...END has been fontified.
-If the region is not specified, it defaults to the whole buffer."
+If the region is not specified, it defaults to the entire accessible
+portion of the buffer."
   (font-lock-set-defaults)
   (funcall font-lock-ensure-function
            (or beg (point-min)) (or end (point-max))))
@@ -1300,15 +1308,18 @@ This function does 2 things:
                       (point-min))))
       (when (< end (point-max))
         (setq end
-              (if (get-text-property end 'font-lock-multiline)
-                  (or (text-property-any end (point-max)
-                                         'font-lock-multiline nil)
-                      (point-max))
+              (cond
+               ((get-text-property end 'font-lock-multiline)
+                (or (text-property-any end (point-max)
+                                       'font-lock-multiline nil)
+                    (point-max)))
+               ;; If `end' has been set by the function above, don't corrupt it.
+               (font-lock-extend-after-change-region-function end)
                 ;; Rounding up to a whole number of lines should include the
                 ;; line right after `end'.  Typical case: the first char of
                 ;; the line was deleted.  Or a \n was inserted in the middle
                 ;; of a line.
-                (1+ end))))
+               (t (1+ end)))))
       ;; Finally, pre-enlarge the region to a whole number of lines, to try
       ;; and anticipate what font-lock-default-fontify-region will do, so as to
       ;; avoid double-redisplay.

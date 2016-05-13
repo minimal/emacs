@@ -1,13 +1,13 @@
 /* Implementation of GUI terminal on the Microsoft Windows API.
 
-Copyright (C) 1989, 1993-2015 Free Software Foundation, Inc.
+Copyright (C) 1989, 1993-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -23,6 +23,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "lisp.h"
 #include "blockinput.h"
 #include "w32term.h"
+#include "w32common.h"	/* for OS version info */
 
 #include <ctype.h>
 #include <errno.h>
@@ -3615,8 +3616,8 @@ w32_set_horizontal_scroll_bar_thumb (struct scroll_bar *bar,
   si.fMask = SIF_PAGE | SIF_POS | SIF_RANGE;
   si.nMin = 0;
   si.nMax = whole;
-  /* Allow nPage to be one larger than nPos so we don't allow to scroll
-     an already fully visible buffer.  */
+  /* Allow nPage to be one larger than nPos so we don't allow the scrolling
+     of an already fully visible buffer.  */
   si.nPage = min (portion, si.nMax) + 1;
   si.nPos = min (position, si.nMax);
   SetScrollInfo (w, SB_CTL, &si, TRUE);
@@ -6115,8 +6116,21 @@ x_set_window_size (struct frame *f, bool change_gravity,
   int pixelwidth, pixelheight;
   Lisp_Object fullscreen = get_frame_param (f, Qfullscreen);
   RECT rect;
+  MENUBARINFO info;
+  int menu_bar_height;
 
   block_input ();
+
+  /* Get the height of the menu bar here.  It's used below to detect
+     whether the menu bar is wrapped.  It's also used to specify the
+     third argument for AdjustWindowRect.  FRAME_EXTERNAL_MENU_BAR which
+     has been used before for that reason is unreliable because it only
+     specifies whether we _want_ a menu bar for this frame and not
+     whether this frame _has_ a menu bar.  See bug#22105.  */
+  info.cbSize = sizeof (info);
+  info.rcBar.top = info.rcBar.bottom = 0;
+  GetMenuBarInfo (FRAME_W32_WINDOW (f), 0xFFFFFFFD, 0, &info);
+  menu_bar_height = info.rcBar.bottom - info.rcBar.top;
 
   if (pixelwise)
     {
@@ -6135,17 +6149,11 @@ x_set_window_size (struct frame *f, bool change_gravity,
 	 height of the frame then the wrapped menu bar lines are not
 	 accounted for (Bug#15174 and Bug#18720).  Here we add these
 	 extra lines to the frame height.  */
-      MENUBARINFO info;
       int default_menu_bar_height;
-      int menu_bar_height;
 
       /* Why is (apparently) SM_CYMENUSIZE needed here instead of
 	 SM_CYMENU ??  */
       default_menu_bar_height = GetSystemMetrics (SM_CYMENUSIZE);
-      info.cbSize = sizeof (info);
-      info.rcBar.top = info.rcBar.bottom = 0;
-      GetMenuBarInfo (FRAME_W32_WINDOW (f), 0xFFFFFFFD, 0, &info);
-      menu_bar_height = info.rcBar.bottom - info.rcBar.top;
 
       if ((default_menu_bar_height > 0)
 	  && (menu_bar_height > default_menu_bar_height)
@@ -6160,8 +6168,7 @@ x_set_window_size (struct frame *f, bool change_gravity,
   rect.right = pixelwidth;
   rect.bottom = pixelheight;
 
-  AdjustWindowRect (&rect, f->output_data.w32->dwStyle,
-		    FRAME_EXTERNAL_MENU_BAR (f));
+  AdjustWindowRect (&rect, f->output_data.w32->dwStyle, menu_bar_height > 0);
 
   if (!(f->after_make_frame)
       && !(f->want_fullscreen & FULLSCREEN_WAIT)
@@ -6224,6 +6231,8 @@ x_set_window_size (struct frame *f, bool change_gravity,
     }
 
   unblock_input ();
+
+  do_pending_window_change (false);
 }
 
 /* Mouse warping.  */
@@ -6231,6 +6240,8 @@ x_set_window_size (struct frame *f, bool change_gravity,
 void
 frame_set_mouse_pixel_position (struct frame *f, int pix_x, int pix_y)
 {
+  UINT trail_num = 0;
+  BOOL ret = false;
   RECT rect;
   POINT pt;
 
@@ -6241,7 +6252,15 @@ frame_set_mouse_pixel_position (struct frame *f, int pix_x, int pix_y)
   pt.y = rect.top + pix_y;
   ClientToScreen (FRAME_W32_WINDOW (f), &pt);
 
+  /* When "mouse trails" are in effect, moving the mouse cursor
+     sometimes leaves behind an annoying "ghost" of the pointer.
+     Avoid that by momentarily switching off mouse trails.  */
+  if (os_subtype == OS_NT
+      && w32_major_version + w32_minor_version >= 6)
+    ret = SystemParametersInfo (SPI_GETMOUSETRAILS, 0, &trail_num, 0);
   SetCursorPos (pt.x, pt.y);
+  if (ret)
+    SystemParametersInfo (SPI_SETMOUSETRAILS, trail_num, NULL, 0);
 
   unblock_input ();
 }
@@ -6925,6 +6944,15 @@ x_delete_display (struct w32_display_info *dpyinfo)
 
 /* Set up use of W32.  */
 
+void
+w32_init_main_thread (void)
+{
+  dwMainThreadId = GetCurrentThreadId ();
+  DuplicateHandle (GetCurrentProcess (), GetCurrentThread (),
+		   GetCurrentProcess (), &hMainThread, 0, TRUE,
+		   DUPLICATE_SAME_ACCESS);
+}
+
 DWORD WINAPI w32_msg_worker (void * arg);
 
 static void
@@ -6984,10 +7012,6 @@ w32_initialize (void)
   /* Create the window thread - it will terminate itself when the app
      terminates */
   init_crit ();
-
-  dwMainThreadId = GetCurrentThreadId ();
-  DuplicateHandle (GetCurrentProcess (), GetCurrentThread (),
-		   GetCurrentProcess (), &hMainThread, 0, TRUE, DUPLICATE_SAME_ACCESS);
 
   /* Wait for thread to start */
   {

@@ -1,13 +1,13 @@
 /* Process support for GNU Emacs on the Microsoft Windows API.
 
-Copyright (C) 1992, 1995, 1999-2015 Free Software Foundation, Inc.
+Copyright (C) 1992, 1995, 1999-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -2062,10 +2062,11 @@ sys_spawnve (int mode, char *cmdname, char **argv, char **envp)
   return pid;
 }
 
-/* Emulate the select call
+/* Emulate the select call.
    Wait for available input on any of the given rfds, or timeout if
-   a timeout is given and no input is detected
-   wfds and efds are not supported and must be NULL.
+   a timeout is given and no input is detected.  wfds are supported
+   only for asynchronous 'connect' calls.  efds are not supported
+   and must be NULL.
 
    For simplicity, we detect the death of child processes here and
    synchronously call the SIGCHLD handler.  Since it is possible for
@@ -3701,6 +3702,13 @@ reading the subprocess output.  If negative, the magnitude is the number
 of time slices to wait (effectively boosting the priority of the child
 process temporarily).  A value of zero disables waiting entirely.  */);
   w32_pipe_read_delay = 50;
+
+  DEFVAR_INT ("w32-pipe-buffer-size", w32_pipe_buffer_size,
+	      doc: /* Size of buffer for pipes created to communicate with subprocesses.
+The size is in bytes, and must be non-negative.  The default is zero,
+which lets the OS use its default size, usually 4KB (4096 bytes).
+Any negative value means to use the default value of zero.  */);
+  w32_pipe_buffer_size = 0;
 
   DEFVAR_LISP ("w32-downcase-file-names", Vw32_downcase_file_names,
 	       doc: /* Non-nil means convert all-upper case file names to lower case.

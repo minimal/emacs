@@ -1,5 +1,5 @@
 /* ftfont.c -- FreeType font driver.
-   Copyright (C) 2006-2015 Free Software Foundation, Inc.
+   Copyright (C) 2006-2016 Free Software Foundation, Inc.
    Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011
      National Institute of Advanced Industrial Science and Technology (AIST)
      Registration Number H13PRO009
@@ -8,8 +8,8 @@ This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -30,6 +30,7 @@ along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.  */
 #include "dispextern.h"
 #include "character.h"
 #include "charset.h"
+#include "category.h"
 #include "composite.h"
 #include "font.h"
 #include "ftfont.h"
@@ -80,6 +81,8 @@ static Lisp_Object ftfont_lookup_cache (Lisp_Object,
                                         enum ftfont_cache_for);
 
 static void ftfont_filter_properties (Lisp_Object font, Lisp_Object alist);
+
+static Lisp_Object ftfont_combining_capability (struct font *);
 
 #define SYMBOL_FcChar8(SYM) (FcChar8 *) SDATA (SYMBOL_NAME (SYM))
 
@@ -547,6 +550,10 @@ struct font_driver ftfont_driver =
 #endif
 
     ftfont_filter_properties, /* filter_properties */
+
+    NULL,			/* cached_font_ok */
+
+    ftfont_combining_capability,
   };
 
 static Lisp_Object
@@ -1776,9 +1783,11 @@ setup_otf_gstring (int size)
 {
   if (otf_gstring.size < size)
     {
-      otf_gstring.glyphs = xnrealloc (otf_gstring.glyphs,
-				      size, sizeof (OTF_Glyph));
-      otf_gstring.size = size;
+      ptrdiff_t new_size = otf_gstring.size;
+      xfree (otf_gstring.glyphs);
+      otf_gstring.glyphs = xpalloc (NULL, &new_size, size - otf_gstring.size,
+				    INT_MAX, sizeof *otf_gstring.glyphs);
+      otf_gstring.size = new_size;
     }
   otf_gstring.used = size;
   memset (otf_gstring.glyphs, 0, sizeof (OTF_Glyph) * size);
@@ -2505,8 +2514,7 @@ ftfont_shape_by_flt (Lisp_Object lgstring, struct font *font,
   ptrdiff_t i;
   struct MFLTFontFT flt_font_ft;
   MFLT *flt = NULL;
-  bool with_variation_selector = 0;
-  MFLTGlyphFT *glyphs;
+  bool with_variation_selector = false;
 
   if (! m17n_flt_initialized)
     {
@@ -2527,12 +2535,12 @@ ftfont_shape_by_flt (Lisp_Object lgstring, struct font *font,
 	break;
       c = LGLYPH_CHAR (g);
       if (CHAR_VARIATION_SELECTOR_P (c))
-	with_variation_selector = 1;
+	with_variation_selector = true;
     }
 
   len = i;
 
-  if (with_variation_selector)
+  if (otf && with_variation_selector)
     {
       setup_otf_gstring (len);
       for (i = 0; i < len; i++)
@@ -2561,38 +2569,6 @@ ftfont_shape_by_flt (Lisp_Object lgstring, struct font *font,
 	}
     }
 
-  if (INT_MAX / 2 < len)
-    memory_full (SIZE_MAX);
-
-  if (gstring.allocated == 0)
-    {
-      gstring.glyph_size = sizeof (MFLTGlyphFT);
-      gstring.glyphs = xnmalloc (len * 2, sizeof (MFLTGlyphFT));
-      gstring.allocated = len * 2;
-    }
-  else if (gstring.allocated < len * 2)
-    {
-      gstring.glyphs = xnrealloc (gstring.glyphs, len * 2,
-				  sizeof (MFLTGlyphFT));
-      gstring.allocated = len * 2;
-    }
-  glyphs = (MFLTGlyphFT *) (gstring.glyphs);
-  memset (glyphs, 0, len * sizeof (MFLTGlyphFT));
-  for (i = 0; i < len; i++)
-    {
-      Lisp_Object g = LGSTRING_GLYPH (lgstring, i);
-
-      glyphs[i].g.c = LGLYPH_CHAR (g);
-      if (with_variation_selector)
-	{
-	  glyphs[i].g.code = LGLYPH_CODE (g);
-	  glyphs[i].g.encoded = 1;
-	}
-    }
-
-  gstring.used = len;
-  gstring.r2l = 0;
-
   {
     Lisp_Object family = Ffont_get (LGSTRING_FONT (lgstring), QCfamily);
 
@@ -2613,23 +2589,62 @@ ftfont_shape_by_flt (Lisp_Object lgstring, struct font *font,
   flt_font_ft.ft_face = ft_face;
   flt_font_ft.otf = otf;
   flt_font_ft.matrix = matrix->xx != 0 ? matrix : 0;
-  if (len > 1
-      && gstring.glyphs[1].c >= 0x300 && gstring.glyphs[1].c <= 0x36F)
-    /* A little bit ad hoc.  Perhaps, shaper must get script and
-       language information, and select a proper flt for them
-       here.  */
-    flt = mflt_get (msymbol ("combining"));
-  for (i = 0; i < 3; i++)
+
+  if (1 < len)
     {
-      int result = mflt_run (&gstring, 0, len, &flt_font_ft.flt_font, flt);
-      if (result != -2)
-	break;
-      if (INT_MAX / 2 < gstring.allocated)
-	memory_full (SIZE_MAX);
-      gstring.glyphs = xnrealloc (gstring.glyphs,
-				  gstring.allocated, 2 * sizeof (MFLTGlyphFT));
-      gstring.allocated *= 2;
+      /* A little bit ad hoc.  Perhaps, shaper must get script and
+	 language information, and select a proper flt for them
+	 here.  */
+      int c1 = LGLYPH_CHAR (LGSTRING_GLYPH (lgstring, 1));
+      /* For the combining characters in the range U+300..U+36F,
+	 "combining" is the sole FLT provided by the m17n-lib.  In
+	 addition, it is the sole FLT that can handle the other
+	 combining characters with non-OTF fonts.  */
+      if ((0x300 <= c1 && c1 <= 0x36F)
+	  || (! otf && CHAR_HAS_CATEGORY (c1, '^')))
+	flt = mflt_get (msymbol ("combining"));
     }
+  if (! flt && ! otf)
+    {
+      flt = mflt_find (LGLYPH_CHAR (LGSTRING_GLYPH (lgstring, 0)),
+		       &flt_font_ft.flt_font);
+      if (! flt)
+	return make_number (0);
+    }
+
+  MFLTGlyphFT *glyphs = (MFLTGlyphFT *) gstring.glyphs;
+  ptrdiff_t allocated = gstring.allocated;
+  ptrdiff_t incr_min = len - allocated;
+
+  do
+    {
+      if (0 < incr_min)
+	{
+	  xfree (glyphs);
+	  glyphs = xpalloc (NULL, &allocated, incr_min, INT_MAX, sizeof *glyphs);
+	}
+      incr_min = 1;
+
+      for (i = 0; i < len; i++)
+	{
+	  Lisp_Object g = LGSTRING_GLYPH (lgstring, i);
+	  memset (&glyphs[i], 0, sizeof glyphs[i]);
+	  glyphs[i].g.c = LGLYPH_CHAR (g);
+	  if (with_variation_selector)
+	    {
+	      glyphs[i].g.code = LGLYPH_CODE (g);
+	      glyphs[i].g.encoded = 1;
+	    }
+	}
+
+      gstring.glyph_size = sizeof *glyphs;
+      gstring.glyphs = (MFLTGlyph *) glyphs;
+      gstring.allocated = allocated;
+      gstring.used = len;
+      gstring.r2l = 0;
+    }
+  while (mflt_run (&gstring, 0, len, &flt_font_ft.flt_font, flt) == -2);
+
   if (gstring.used > LGSTRING_GLYPH_LEN (lgstring))
     return Qnil;
   for (i = 0; i < gstring.used; i++)
@@ -2679,8 +2694,6 @@ ftfont_shape (Lisp_Object lgstring)
   struct ftfont_info *ftfont_info = (struct ftfont_info *) font;
   OTF *otf = ftfont_get_otf (ftfont_info);
 
-  if (! otf)
-    return make_number (0);
   return ftfont_shape_by_flt (lgstring, font, ftfont_info->ft_size->face, otf,
 			      &ftfont_info->matrix);
 }
@@ -2753,6 +2766,16 @@ ftfont_filter_properties (Lisp_Object font, Lisp_Object alist)
   font_filter_properties (font, alist, ftfont_booleans, ftfont_non_booleans);
 }
 
+
+static Lisp_Object
+ftfont_combining_capability (struct font *font)
+{
+#ifdef HAVE_M17N_FLT
+  return Qt;
+#else
+  return Qnil;
+#endif
+}
 
 void
 syms_of_ftfont (void)

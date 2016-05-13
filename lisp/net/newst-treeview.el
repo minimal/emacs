@@ -1,6 +1,6 @@
 ;;; newst-treeview.el --- Treeview frontend for newsticker.  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2016 Free Software Foundation, Inc.
 
 ;; Author:      Ulf Jasper <ulf.jasper@web.de>
 ;; Filename:    newst-treeview.el
@@ -77,7 +77,7 @@
   :group 'newsticker-treeview)
 
 (defface newsticker-treeview-selection-face
-  '((((class color) (background dark))  :background "#bbbbff")
+  '((((class color) (background dark))  :background "#4444aa")
     (((class color) (background light)) :background "#bbbbff"))
   "Face for newsticker selection."
   :group 'newsticker-treeview)
@@ -132,9 +132,9 @@ Example: (\"Topmost group\" \"feed1\" (\"subgroup1\" \"feed 2\")
 
 (defcustom newsticker-groups-filename
   nil
-  "Name of the newsticker groups settings file.  This variable is obsolete."
+  "Name of the newsticker groups settings file."
   :version "25.1"                       ; changed default value to nil
-  :type 'string
+  :type '(choice (const nil) string)
   :group 'newsticker-treeview)
 (make-obsolete-variable 'newsticker-groups-filename 'newsticker-dir "23.1")
 
@@ -267,28 +267,34 @@ their id stays constant."
   "Render text between markers START and END."
   (if newsticker-html-renderer
       (condition-case error-data
-          (save-excursion
-            (set-marker-insertion-type end t)
-            ;; check whether it is necessary to call html renderer
-            ;; (regexp inspired by htmlr.el)
-            (goto-char start)
-            (when (re-search-forward
-                   "</?[A-Za-z1-6]*\\|&#?[A-Za-z0-9]+;" end t)
-              ;; (message "%s" (newsticker--title item))
-              (let ((w3m-fill-column (if newsticker-use-full-width
-                                         -1 fill-column))
-                    (w3-maximum-line-length
-                     (if newsticker-use-full-width nil fill-column)))
-                (save-excursion
-                  (funcall newsticker-html-renderer start end)))
-              ;;(cond ((eq newsticker-html-renderer 'w3m-region)
-              ;;     (add-text-properties start end (list 'keymap
-              ;;                                        w3m-minor-mode-map)))
-              ;;((eq newsticker-html-renderer 'w3-region)
-              ;;(add-text-properties start end (list 'keymap w3-mode-map))))
-              (if (eq newsticker-html-renderer 'w3m-region)
-                  (w3m-toggle-inline-images t))
-              t))
+          ;; Need to save selected window in order to prevent mixing
+          ;; up contents of the item buffer.  This happens with shr
+          ;; which does some smart optimizations that apparently
+          ;; interfere with our own, maybe not-so-smart, optimizations.
+          (save-selected-window
+            (save-excursion
+              (set-marker-insertion-type end t)
+              ;; check whether it is necessary to call html renderer
+              ;; (regexp inspired by htmlr.el)
+              (goto-char start)
+              (when (re-search-forward
+                     "</?[A-Za-z1-6]*\\|&#?[A-Za-z0-9]+;" end t)
+                ;; (message "%s" (newsticker--title item))
+                (let ((w3m-fill-column (if newsticker-use-full-width
+                                           -1 fill-column))
+                      (w3-maximum-line-length
+                       (if newsticker-use-full-width nil fill-column)))
+                  (select-window (newsticker--treeview-item-window))
+                  (save-excursion
+                    (funcall newsticker-html-renderer start end)))
+                ;;(cond ((eq newsticker-html-renderer 'w3m-region)
+                ;;     (add-text-properties start end (list 'keymap
+                ;;                                        w3m-minor-mode-map)))
+                ;;((eq newsticker-html-renderer 'w3-region)
+                ;;(add-text-properties start end (list 'keymap w3-mode-map))))
+                (if (eq newsticker-html-renderer 'w3m-region)
+                    (w3m-toggle-inline-images t))
+                t)))
         (error
          (message "Error: HTML rendering failed: %s, %s"
                   (car error-data) (cdr error-data))

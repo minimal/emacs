@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1993, 1998-1999, 2001-2015 Free Software
+@c Copyright (C) 1990-1993, 1998-1999, 2001-2016 Free Software
 @c Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node GNU Emacs Internals
@@ -32,7 +32,9 @@ executable.  You don't have to know this material to build and install
 Emacs, since the makefiles do all these things automatically.  This
 information is pertinent to Emacs developers.
 
-   Compilation of the C source files in the @file{src} directory
+  Building Emacs requires GNU Make version 3.81 or later.
+
+  Compilation of the C source files in the @file{src} directory
 produces an executable file called @file{temacs}, also called a
 @dfn{bare impure Emacs}.  It contains the Emacs Lisp interpreter and
 I/O routines, but not the editing commands.

@@ -1,6 +1,6 @@
 ;;; pcvs.el --- a front-end to CVS  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1991-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1991-2016 Free Software Foundation, Inc.
 
 ;; Author: (The PCL-CVS Trust) pcl-cvs@cyclic.com
 ;;	(Per Cederqvist) ceder@lysator.liu.se
@@ -58,8 +58,8 @@
 ;; ******** FIX THE DOCUMENTATION *********
 ;;
 ;; - rework the displaying of error messages.
-;; - allow to flush messages only
-;; - allow to protect files like ChangeLog from flushing
+;; - allow the flushing of messages only
+;; - allow the protection of files like ChangeLog from flushing
 ;; - query the user for cvs-get-marked (for some cmds or if nothing's selected)
 ;; - don't return the first (resp last) FI if the cursor is before
 ;;   (resp after) it.
@@ -2209,7 +2209,7 @@ With prefix argument, prompt for cvs flags."
 ;; Byte compile files.
 
 (defun-cvs-mode cvs-mode-byte-compile-files ()
-  "Run byte-compile-file on all selected files with '.el' extension."
+  "Run byte-compile-file on all selected files with `.el' extension."
   (interactive)
   (let ((marked (cvs-get-marked (cvs-ignore-marks-p "byte-compile"))))
     (dolist (fi marked)

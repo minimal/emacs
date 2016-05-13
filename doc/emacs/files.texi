@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 1999-2015 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 1999-2016 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Files
@@ -530,11 +530,16 @@ another from the newly saved contents if you save again.
 
 @node Backup Names
 @subsubsection Single or Numbered Backups
+@cindex backup file names
+@cindex names of backup files
 
+@cindex @file{~}, in names of backup files
+@cindex tilde (@file{~}) at end of backup file name
   When Emacs makes a backup file, its name is normally constructed by
 appending @samp{~} to the file name being edited; thus, the backup
 file for @file{eval.c} would be @file{eval.c~}.
 
+@cindex @file{~/.emacs.d/%backup%~}
   If access control stops Emacs from writing backup files under the
 usual names, it writes the backup file as @file{~/.emacs.d/%backup%~}.
 Only one such file can exist, so only the most recently made such
@@ -881,9 +886,10 @@ Time-stamp: " "
 @code{before-save-hook} (@pxref{Hooks}).  When you save the file, this
 function then automatically updates the time stamp with the current
 date and time.  You can also use the command @kbd{M-x time-stamp} to
-update the time stamp manually.  For other customizations, see the
-Custom group @code{time-stamp}.  Note that the time stamp is formatted
-according to your locale setting (@pxref{Environment}).
+update the time stamp manually.  By default the time stamp is
+formatted according to your locale setting (@pxref{Environment}) and
+time zone (@pxref{Time of Day,,, elisp, The Emacs Lisp Reference
+Manual}).  For customizations, see the Custom group @code{time-stamp}.
 
 @node Reverting
 @section Reverting a Buffer
@@ -1295,11 +1301,12 @@ would make to the file if you save the buffer.
 
 @findex compare-windows
   The command @kbd{M-x compare-windows} compares the text in the
-current window with that in the next window.  (For more information
-about windows in Emacs, @ref{Windows}.)  Comparison starts at point in
-each window, after pushing each initial point value on the mark ring
-in its respective buffer.  Then it moves point forward in each window,
-one character at a time, until it reaches characters that don't match.
+current window with that in the window that was the selected window
+before you selected the current one.  (For more information about
+windows in Emacs, @ref{Windows}.)  Comparison starts at point in each
+window, after pushing each initial point value on the mark ring in its
+respective buffer.  Then it moves point forward in each window, one
+character at a time, until it reaches characters that don't match.
 Then the command exits.
 
   If point in the two windows is followed by non-matching text when

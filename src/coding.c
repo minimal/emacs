@@ -1,5 +1,5 @@
 /* Coding system handler (conversion, detection, etc).
-   Copyright (C) 2001-2015 Free Software Foundation, Inc.
+   Copyright (C) 2001-2016 Free Software Foundation, Inc.
    Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
      2005, 2006, 2007, 2008, 2009, 2010, 2011
      National Institute of Advanced Industrial Science and Technology (AIST)
@@ -12,8 +12,8 @@ This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -1008,11 +1008,12 @@ coding_change_destination (struct coding_system *coding)
 static void
 coding_alloc_by_realloc (struct coding_system *coding, ptrdiff_t bytes)
 {
-  if (STRING_BYTES_BOUND - coding->dst_bytes < bytes)
+  ptrdiff_t newbytes;
+  if (INT_ADD_WRAPV (coding->dst_bytes, bytes, &newbytes)
+      || SIZE_MAX < newbytes)
     string_overflow ();
-  coding->destination = xrealloc (coding->destination,
-				  coding->dst_bytes + bytes);
-  coding->dst_bytes += bytes;
+  coding->destination = xrealloc (coding->destination, newbytes);
+  coding->dst_bytes = newbytes;
 }
 
 static void
@@ -6827,11 +6828,11 @@ decode_eol (struct coding_system *coding)
 	}
       else
 	{
-	  ptrdiff_t pos_byte = coding->dst_pos_byte;
 	  ptrdiff_t pos = coding->dst_pos;
-	  ptrdiff_t pos_end = pos + coding->produced_char - 1;
+	  ptrdiff_t pos_byte = coding->dst_pos_byte;
+	  ptrdiff_t pos_end = pos_byte + coding->produced - 1;
 
-	  while (pos < pos_end)
+	  while (pos_byte < pos_end)
 	    {
 	      p = BYTE_POS_ADDR (pos_byte);
 	      if (*p == '\r' && p[1] == '\n')
@@ -7048,14 +7049,12 @@ produce_chars (struct coding_system *coding, Lisp_Object translation_table,
 	      if ((dst_end - dst) / MAX_MULTIBYTE_LENGTH < to_nchars)
 		{
 		  eassert (growable_destination (coding));
-		  if (((min (PTRDIFF_MAX, SIZE_MAX) - (buf_end - buf))
-		       / MAX_MULTIBYTE_LENGTH)
-		      < to_nchars)
+		  ptrdiff_t dst_size;
+		  if (INT_MULTIPLY_WRAPV (to_nchars, MAX_MULTIBYTE_LENGTH,
+					  &dst_size)
+		      || INT_ADD_WRAPV (buf_end - buf, dst_size, &dst_size))
 		    memory_full (SIZE_MAX);
-		  dst = alloc_destination (coding,
-					   buf_end - buf
-					   + MAX_MULTIBYTE_LENGTH * to_nchars,
-					   dst);
+		  dst = alloc_destination (coding, dst_size, dst);
 		  if (EQ (coding->src_object, coding->dst_object))
 		    {
 		      coding_set_source (coding);
@@ -9801,7 +9800,7 @@ DEFUN ("find-operation-coding-system", Ffind_operation_coding_system,
        doc: /* Choose a coding system for an operation based on the target name.
 The value names a pair of coding systems: (DECODING-SYSTEM . ENCODING-SYSTEM).
 DECODING-SYSTEM is the coding system to use for decoding
-(in case OPERATION does decoding), and ENCODING-SYSTEM is the coding system
+\(in case OPERATION does decoding), and ENCODING-SYSTEM is the coding system
 for encoding (in case OPERATION does encoding).
 
 The first argument OPERATION specifies an I/O primitive:
@@ -11176,7 +11175,7 @@ the cdr part is used for encoding a text to be sent to a process.  */);
 Table of extra Latin codes in the range 128..159 (inclusive).
 This is a vector of length 256.
 If Nth element is non-nil, the existence of code N in a file
-(or output of subprocess) doesn't prevent it to be detected as
+\(or output of subprocess) doesn't prevent it to be detected as
 a coding system of ISO 2022 variant which has a flag
 `accept-latin-extra-code' t (e.g. iso-latin-1) on reading a file
 or reading output of a subprocess.

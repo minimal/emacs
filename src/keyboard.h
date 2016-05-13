@@ -1,13 +1,13 @@
 /* Declarations useful when processing input.
-   Copyright (C) 1985-1987, 1993, 2001-2015 Free Software Foundation,
+   Copyright (C) 1985-1987, 1993, 2001-2016 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -244,6 +244,18 @@ extern KBOARD *current_kboard;
 
 /* Total number of times read_char has returned, modulo UINTMAX_MAX + 1.  */
 extern uintmax_t num_input_events;
+
+/* The location of point immediately before the last command was
+   executed, or the last time the undo-boundary command added a
+   boundary.*/
+extern ptrdiff_t point_before_last_command_or_undo;
+
+/* The value of current_buffer immediately before the last command was
+   executed, or the last time the undo-boundary command added a
+   boundary.*/
+extern struct buffer *buffer_before_last_command_or_undo;
+
+extern struct buffer *prev_buffer;
 
 /* Nonzero means polling for input is temporarily suppressed.  */
 extern int poll_suppress_count;

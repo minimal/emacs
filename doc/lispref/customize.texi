@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1997-2015 Free Software Foundation, Inc.
+@c Copyright (C) 1997-2016 Free Software Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Customization
 @chapter Customization Settings
@@ -334,7 +334,8 @@ macro accepts the following keywords:
 @item :type @var{type}
 Use @var{type} as the data type for this option.  It specifies which
 values are legitimate, and how to display the value
-(@pxref{Customization Types}).
+(@pxref{Customization Types}).  Every @code{defcustom} should specify
+a value for this keyword.
 
 @item :options @var{value-list}
 @kindex options@r{, @code{defcustom} keyword}

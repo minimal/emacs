@@ -1,14 +1,14 @@
 /* Session management module for systems which understand the X Session
    management protocol.
 
-Copyright (C) 2002-2015 Free Software Foundation, Inc.
+Copyright (C) 2002-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -223,9 +223,8 @@ smc_save_yourself_CB (SmcConn smcConn,
   props[props_idx]->name = xstrdup (SmRestartCommand);
   props[props_idx]->type = xstrdup (SmLISTofARRAY8);
   /* /path/to/emacs, --smid=xxx --no-splash --chdir=dir ... */
-  if (INT_MAX - 3 < initial_argc)
+  if (INT_ADD_WRAPV (initial_argc, 3, &i))
     memory_full (SIZE_MAX);
-  i = 3 + initial_argc;
   props[props_idx]->num_vals = i;
   vp = xnmalloc (i, sizeof *vp);
   props[props_idx]->vals = vp;
@@ -546,7 +545,7 @@ syms_of_xsmfns (void)
 Changing the value does not change the session id used by Emacs.
 The value is nil if no session manager is running.
 See also `x-session-previous-id', `emacs-save-session-functions',
-`emacs-session-save' and `emacs-session-restore'." */);
+`emacs-session-save' and `emacs-session-restore'.  */);
   Vx_session_id = Qnil;
 
   DEFVAR_LISP ("x-session-previous-id", Vx_session_previous_id,
@@ -569,7 +568,7 @@ The session id Emacs has while it is running is in the variable
 same, depending on how the session manager works.
 
 See also `emacs-save-session-functions', `emacs-session-save' and
-`emacs-session-restore'." */);
+`emacs-session-restore'.  */);
   Vx_session_previous_id = Qnil;
 
   defsubr (&Shandle_save_session);

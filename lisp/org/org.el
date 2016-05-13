@@ -1,7 +1,7 @@
 ;;; org.el --- Outline-based notes management and organizer
 
 ;; Carstens outline-mode for keeping track of everything.
-;; Copyright (C) 2004-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2004-2016 Free Software Foundation, Inc.
 ;;
 ;; Author: Carsten Dominik <carsten at orgmode dot org>
 ;; Maintainer: Carsten Dominik <carsten at orgmode dot org>
@@ -2254,7 +2254,7 @@ fast, while still showing the whole path to the entry."
   :type 'boolean)
 
 (defcustom org-refile-allow-creating-parent-nodes nil
-  "Non-nil means allow to create new nodes as refile targets.
+  "Non-nil means allow the creation of new nodes as refile targets.
 New nodes are then created by adding \"/new node name\" to the completion
 of an existing node.  When the value of this variable is `confirm',
 new node creation must be confirmed by the user (recommended).
@@ -7094,7 +7094,7 @@ open and agenda-wise Org files."
 	  (org-flag-drawer t))))))
 
 (defun org-cycle-hide-inline-tasks (state)
-  "Re-hide inline tasks when switching to 'contents or 'children
+  "Re-hide inline tasks when switching to `contents' or `children'
 visibility state."
   (case state
     (contents
@@ -7323,8 +7323,8 @@ returns to the original buffer in which the visibility is still
 unchanged.  After RET it will also jump to the location selected
 in the indirect buffer and expose the headline hierarchy above.
 
-With a prefix argument, use the alternative interface: e.g. if
-`org-goto-interface' is 'outline use 'outline-path-completion."
+With a prefix argument, use the alternative interface: e.g., if
+`org-goto-interface' is `outline' use `outline-path-completion'."
   (interactive "P")
   (org-goto-map)
   (let* ((org-refile-targets `((nil . (:maxlevel . ,org-goto-max-level))))
@@ -22663,7 +22663,7 @@ contains commented lines.  Otherwise, comment them."
   "Non-nil when TIMESTAMP has a time specified."
   (org-element-property :hour-start timestamp))
 
-(defun org-timestamp-format (timestamp format &optional end utc)
+(defun org-timestamp-format (timestamp format &optional end zone)
   "Format a TIMESTAMP element into a string.
 
 FORMAT is a format specifier to be passed to
@@ -22672,8 +22672,9 @@ FORMAT is a format specifier to be passed to
 When optional argument END is non-nil, use end of date-range or
 time-range, if possible.
 
-When optional argument UTC is non-nil, time will be expressed as
-Universal Time."
+The optional ZONE is omitted or nil for Emacs local time, t for
+Universal Time, `wall' for system wall clock time, or a string as in
+the TZ environment variable."
   (format-time-string
    format
    (apply 'encode-time
@@ -22683,7 +22684,7 @@ Universal Time."
                  (if end '(:minute-end :hour-end :day-end :month-end :year-end)
                    '(:minute-start :hour-start :day-start :month-start
                                    :year-start)))))
-   utc))
+   zone))
 
 (defun org-timestamp-split-range (timestamp &optional end)
   "Extract a timestamp object from a date or time range.

@@ -1,6 +1,6 @@
 ;;; diary-lib.el --- diary functions
 
-;; Copyright (C) 1989-1990, 1992-1995, 2001-2015 Free Software
+;; Copyright (C) 1989-1990, 1992-1995, 2001-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Edward M. Reingold <reingold@cs.uiuc.edu>
@@ -296,6 +296,7 @@ Used by the function `diary-remind', a pseudo-pattern is a list of
 expressions that can involve the keywords `days' (a number), `date'
 \(a list of month, day, year), and `diary-entry' (a string)."
   :type 'sexp
+  :risky t
   :group 'diary)
 
 (defcustom diary-abbreviated-year-flag t
@@ -412,6 +413,7 @@ The format of the header is specified by `diary-header-line-format'."
 Only used if `diary-header-line-flag' is non-nil."
   :group 'diary
   :type 'sexp
+  :risky t
   :initialize 'custom-initialize-default
   :set 'diary-set-header
   :version "23.3")                      ; frame-width -> window-width
@@ -909,13 +911,15 @@ This is recursive; that is, included files may include other files."
                         (append diary-entries-list
                                 (diary-list-entries original-date number t)))))
             (display-warning
-             :error
+             'diary
              (format-message "Can't read included diary file %s\n"
-			     diary-file)))
+			     diary-file)
+             :error))
         (display-warning
-         :error
+         'diary
          (format-message "Can't find included diary file %s\n"
-			 diary-file)))))
+			 diary-file)
+         :error))))
   (goto-char (point-min)))
 
 (defun diary-include-other-diary-files ()
@@ -1190,7 +1194,7 @@ ensure that all relevant variables are set.
 
 \(setq diary-mail-days 3
       diary-file \"/path/to/diary.file\"
-      calendar-date-style 'european
+      calendar-date-style \\='european
       diary-mail-addr \"user@host.name\")
 
 \(diary-mail-entries)
@@ -1410,11 +1414,12 @@ marks.  This is intended to deal with deleted diary entries."
                         (eval (car (read-from-string sexp)))
                       (error
                        (display-warning
-                        :error
+                        'diary
                         (format "Bad diary sexp at line %d in %s:\n%s\n\
 Error: %s\n"
                                 (count-lines (point-min) (point))
-                                diary-file sexp err))
+                                diary-file sexp err)
+                        :error)
                        nil))))))
     (cond ((stringp result) result)
           ((and (consp result)

@@ -2,7 +2,7 @@
    0.12.  (Implements POSIX draft P1003.2/D11.2, except for some of the
    internationalization features.)
 
-   Copyright (C) 1993-2015 Free Software Foundation, Inc.
+   Copyright (C) 1993-2016 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -5444,7 +5444,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 	case charset:
 	case charset_not:
 	  {
-	    register unsigned int c;
+	    register unsigned int c, corig;
 	    boolean not = (re_opcode_t) *(p - 1) == charset_not;
 	    int len;
 
@@ -5473,7 +5473,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 	      }
 
 	    PREFETCH ();
-	    c = RE_STRING_CHAR_AND_LENGTH (d, len, target_multibyte);
+	    corig = c = RE_STRING_CHAR_AND_LENGTH (d, len, target_multibyte);
 	    if (target_multibyte)
 	      {
 		int c1;
@@ -5517,11 +5517,17 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 	      {
 		int class_bits = CHARSET_RANGE_TABLE_BITS (&p[-1]);
 
-		if (  (class_bits & BIT_LOWER && ISLOWER (c))
+		if (  (class_bits & BIT_LOWER
+		       && (ISLOWER (c)
+			   || (corig != c
+			       && c == upcase (corig) && ISUPPER(c))))
 		    | (class_bits & BIT_MULTIBYTE)
 		    | (class_bits & BIT_PUNCT && ISPUNCT (c))
 		    | (class_bits & BIT_SPACE && ISSPACE (c))
-		    | (class_bits & BIT_UPPER && ISUPPER (c))
+		    | (class_bits & BIT_UPPER
+		       && (ISUPPER (c)
+			   || (corig != c
+			       && c == downcase (corig) && ISLOWER (c))))
 		    | (class_bits & BIT_WORD  && ISWORD  (c))
 		    | (class_bits & BIT_ALPHA && ISALPHA (c))
 		    | (class_bits & BIT_ALNUM && ISALNUM (c))
@@ -5945,12 +5951,12 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 #ifdef emacs
 		ssize_t offset = PTR_TO_OFFSET (d - 1);
 		ssize_t charpos = SYNTAX_TABLE_BYTE_TO_CHAR (offset);
-		UPDATE_SYNTAX_TABLE (charpos);
+		UPDATE_SYNTAX_TABLE_FAST (charpos);
 #endif
 		GET_CHAR_BEFORE_2 (c1, d, string1, end1, string2, end2);
 		s1 = SYNTAX (c1);
 #ifdef emacs
-		UPDATE_SYNTAX_TABLE_FORWARD (charpos + 1);
+		UPDATE_SYNTAX_TABLE_FORWARD_FAST (charpos + 1);
 #endif
 		PREFETCH_NOLIMIT ();
 		GET_CHAR_AFTER (c2, d, dummy);
@@ -5987,7 +5993,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 #ifdef emacs
 	      ssize_t offset = PTR_TO_OFFSET (d);
 	      ssize_t charpos = SYNTAX_TABLE_BYTE_TO_CHAR (offset);
-	      UPDATE_SYNTAX_TABLE (charpos);
+	      UPDATE_SYNTAX_TABLE_FAST (charpos);
 #endif
 	      PREFETCH ();
 	      GET_CHAR_AFTER (c2, d, dummy);
@@ -6032,7 +6038,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 #ifdef emacs
 	      ssize_t offset = PTR_TO_OFFSET (d) - 1;
 	      ssize_t charpos = SYNTAX_TABLE_BYTE_TO_CHAR (offset);
-	      UPDATE_SYNTAX_TABLE (charpos);
+	      UPDATE_SYNTAX_TABLE_FAST (charpos);
 #endif
 	      GET_CHAR_BEFORE_2 (c1, d, string1, end1, string2, end2);
 	      s1 = SYNTAX (c1);
@@ -6047,7 +6053,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 		  PREFETCH_NOLIMIT ();
 		  GET_CHAR_AFTER (c2, d, dummy);
 #ifdef emacs
-		  UPDATE_SYNTAX_TABLE_FORWARD (charpos);
+		  UPDATE_SYNTAX_TABLE_FORWARD_FAST (charpos);
 #endif
 		  s2 = SYNTAX (c2);
 
@@ -6076,7 +6082,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 #ifdef emacs
 	      ssize_t offset = PTR_TO_OFFSET (d);
 	      ssize_t charpos = SYNTAX_TABLE_BYTE_TO_CHAR (offset);
-	      UPDATE_SYNTAX_TABLE (charpos);
+	      UPDATE_SYNTAX_TABLE_FAST (charpos);
 #endif
 	      PREFETCH ();
 	      c2 = RE_STRING_CHAR (d, target_multibyte);
@@ -6119,7 +6125,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 #ifdef emacs
 	      ssize_t offset = PTR_TO_OFFSET (d) - 1;
 	      ssize_t charpos = SYNTAX_TABLE_BYTE_TO_CHAR (offset);
-	      UPDATE_SYNTAX_TABLE (charpos);
+	      UPDATE_SYNTAX_TABLE_FAST (charpos);
 #endif
 	      GET_CHAR_BEFORE_2 (c1, d, string1, end1, string2, end2);
 	      s1 = SYNTAX (c1);
@@ -6134,7 +6140,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 		  PREFETCH_NOLIMIT ();
 		  c2 = RE_STRING_CHAR (d, target_multibyte);
 #ifdef emacs
-		  UPDATE_SYNTAX_TABLE_FORWARD (charpos + 1);
+		  UPDATE_SYNTAX_TABLE_FORWARD_FAST (charpos + 1);
 #endif
 		  s2 = SYNTAX (c2);
 
@@ -6157,7 +6163,7 @@ re_match_2_internal (struct re_pattern_buffer *bufp, const_re_char *string1,
 	    {
 	      ssize_t offset = PTR_TO_OFFSET (d);
 	      ssize_t pos1 = SYNTAX_TABLE_BYTE_TO_CHAR (offset);
-	      UPDATE_SYNTAX_TABLE (pos1);
+	      UPDATE_SYNTAX_TABLE_FAST (pos1);
 	    }
 #endif
 	    {

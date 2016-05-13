@@ -1,13 +1,13 @@
 /* Menu support for GNU Emacs on the Microsoft Windows API.
-   Copyright (C) 1986, 1988, 1993-1994, 1996, 1998-1999, 2001-2015 Free
+   Copyright (C) 1986, 1988, 1993-1994, 1996, 1998-1999, 2001-2016 Free
    Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -494,7 +494,10 @@ set_frame_menubar (struct frame *f, bool first_time, bool deep_p)
     /* Force the window size to be recomputed so that the frame's text
        area remains the same, if menubar has just been created.  */
     if (old_widget == NULL)
-      adjust_frame_size (f, -1, -1, 2, false, Qmenu_bar_lines);
+      {
+	windows_or_buffers_changed = 23;
+	adjust_frame_size (f, -1, -1, 2, false, Qmenu_bar_lines);
+      }
   }
 
   unblock_input ();

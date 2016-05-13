@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 2001-2015 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 2001-2016 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @iftex
@@ -1065,7 +1065,7 @@ send it to the developers.  Sending it to
 recommended, because that list is coupled to a tracking system that
 makes it easier to locate patches.  If your patch is not complete and
 you think it needs more discussion, you might want to send it to
-@email{emacs-devel@@gnu@@gnu.org} instead.  If you revise your patch,
+@email{emacs-devel@@gnu.org} instead.  If you revise your patch,
 send it as a followup to the initial topic.
 
 We prefer to get the patches as plain text, either inline (be careful

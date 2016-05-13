@@ -1,6 +1,6 @@
 ;;; filesets.el --- handle group of files
 
-;; Copyright (C) 2002-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2016 Free Software Foundation, Inc.
 
 ;; Author: Thomas Link <sanobast-emacs@yahoo.de>
 ;; Maintainer: emacs-devel@gnu.org
@@ -140,7 +140,7 @@ put \"(setq filesets-menu-ensure-use-cached VALUE)\" into your startup
 file -- before loading filesets.el.
 
 So, when should you think about setting this value to t? If filesets.el
-is loaded before user customizations.  Thus, if (require 'filesets)
+is loaded before user customizations.  Thus, if (require \\='filesets)
 precedes the `custom-set-variables' command or, for XEmacs, if init.el
 is loaded before custom.el, set this variable to t.")
 

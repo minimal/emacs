@@ -1,6 +1,6 @@
 ;;; project-am.el --- A project management scheme based on automake files.
 
-;; Copyright (C) 1998-2000, 2003, 2005, 2007-2015 Free Software
+;; Copyright (C) 1998-2000, 2003, 2005, 2007-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
@@ -65,7 +65,7 @@
 (defcustom project-am-debug-target-function 'gdb
   "*Default Emacs command used to debug a target."
   :group 'project-am
-  :type 'sexp) ; make this be a list some day
+  :type 'function) ; make this be a list some day
 
 (defconst project-am-type-alist
   '(("bin" project-am-program "bin_PROGRAMS" t)

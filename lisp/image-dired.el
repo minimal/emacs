@@ -1,6 +1,6 @@
 ;;; image-dired.el --- use dired to browse and manipulate your images
 ;;
-;; Copyright (C) 2005-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2005-2016 Free Software Foundation, Inc.
 ;;
 ;; Version: 0.4.11
 ;; Keywords: multimedia
@@ -1205,8 +1205,8 @@ comment."
 
 (defun image-dired-modify-mark-on-thumb-original-file (command)
   "Modify mark in dired buffer.
-COMMAND is one of 'mark for marking file in dired, 'unmark for
-unmarking file in dired or 'flag for flagging file for delete in
+COMMAND is one of `mark' for marking file in dired, `unmark' for
+unmarking file in dired or `flag' for flagging file for delete in
 dired."
   (let ((file-name (image-dired-original-file-name))
         (dired-buf (image-dired-associated-dired-buffer)))

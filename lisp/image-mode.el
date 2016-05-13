@@ -1,6 +1,6 @@
 ;;; image-mode.el --- support for visiting image files  -*- lexical-binding: t -*-
 ;;
-;; Copyright (C) 2005-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2005-2016 Free Software Foundation, Inc.
 ;;
 ;; Author: Richard Stallman <rms@gnu.org>
 ;; Keywords: multimedia
@@ -153,6 +153,8 @@ otherwise it defaults to t, used for times when the buffer is not displayed."
                          (selected-window))))
 
 (declare-function image-size "image.c" (spec &optional pixels frame))
+(declare-function xwidget-info "xwidget.c" (xwidget))
+(declare-function xwidget-at "xwidget.el" (pos))
 
 (defun image-display-size (spec &optional pixels frame)
   "Wrapper around `image-size', handling slice display properties.
@@ -160,24 +162,29 @@ Like `image-size', the return value is (WIDTH . HEIGHT).
 WIDTH and HEIGHT are in canonical character units if PIXELS is
 nil, and in pixel units if PIXELS is non-nil.
 
-If SPEC is an image display property, this function is equivalent
-to `image-size'.  If SPEC is a list of properties containing
-`image' and `slice' properties, return the display size taking
-the slice property into account.  If the list contains `image'
-but not `slice', return the `image-size' of the specified image."
-  (if (eq (car spec) 'image)
-      (image-size spec pixels frame)
-    (let ((image (assoc 'image spec))
-	  (slice (assoc 'slice spec)))
-      (cond ((and image slice)
-	     (if pixels
-		 (cons (nth 3 slice) (nth 4 slice))
-	       (cons (/ (float (nth 3 slice)) (frame-char-width frame))
-		     (/ (float (nth 4 slice)) (frame-char-height frame)))))
-	    (image
-	     (image-size image pixels frame))
-	    (t
-	     (error "Invalid image specification: %s" spec))))))
+If SPEC is an image display property, this function is equivalent to
+`image-size'.  If SPEC represents an xwidget object, defer to `xwidget-info'.
+If SPEC is a list of properties containing `image' and `slice' properties,
+return the display size taking the slice property into account.  If the list
+contains `image' but not `slice', return the `image-size' of the specified
+image."
+  (cond ((eq (car spec) 'xwidget)
+         (let ((xwi (xwidget-info (xwidget-at (point-min)))))
+           (cons (aref xwi 2) (aref xwi 3))))
+        ((eq (car spec) 'image)
+         (image-size spec pixels frame))
+        (t (let ((image (assoc 'image spec))
+                 (slice (assoc 'slice spec)))
+             (cond ((and image slice)
+                    (if pixels
+                        (cons (nth 3 slice) (nth 4 slice))
+                      (cons (/ (float (nth 3 slice)) (frame-char-width frame))
+                            (/ (float (nth 4 slice))
+                               (frame-char-height frame)))))
+                   (image
+                    (image-size image pixels frame))
+                   (t
+                    (error "Invalid image specification: %s" spec)))))))
 
 (defun image-forward-hscroll (&optional n)
   "Scroll image in current window to the left by N character widths.
@@ -658,7 +665,12 @@ was inserted."
 			   (not (and (boundp 'archive-superior-buffer)
 				     archive-superior-buffer))
 			   (not (and (boundp 'tar-superior-buffer)
-				     tar-superior-buffer)))))
+				     tar-superior-buffer))
+                           ;; This means the buffer holds the
+                           ;; decrypted content (bug#21870).
+                           (not (and (boundp 'epa-file-encrypt-to)
+                                     (local-variable-p
+                                      'epa-file-encrypt-to))))))
 	 (file-or-data (if data-p
 			   (string-make-unibyte
 			    (buffer-substring-no-properties (point-min) (point-max)))

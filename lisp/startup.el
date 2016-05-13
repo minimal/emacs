@@ -1,6 +1,6 @@
 ;;; startup.el --- process Emacs shell arguments  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1986, 1992, 1994-2015 Free Software Foundation,
+;; Copyright (C) 1985-1986, 1992, 1994-2016 Free Software Foundation,
 ;; Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -76,13 +76,24 @@ once you are familiar with the contents of the startup screen."
 
 (defvar startup-screen-inhibit-startup-screen nil)
 
-;; FIXME? Why does this get such weirdly extreme treatment, when the
-;; more important inhibit-startup-screen does not.
+;; The mechanism used to ensure that only end users can disable this
+;; message is not complex.  Clearly, it is possible for a determined
+;; system administrator to inhibit this message anyway, but at least
+;; they will do so with knowledge of why the Emacs developers think
+;; this is a bad idea.
 (defcustom inhibit-startup-echo-area-message nil
   "Non-nil inhibits the initial startup echo area message.
-Setting this variable takes effect
-only if you do it with the customization buffer
-or if your init file contains a line of this form:
+
+The startup message is in the echo area as it provides information
+about GNU Emacs and the GNU system in general, which we want all
+users to see.  As this is the least intrusive startup message,
+this variable gets specialized treatment to prevent the message
+from being disabled site-wide by systems administrators, while
+still allowing individual users to do so.
+
+Setting this variable takes effect only if you do it with the
+customization buffer or if your init file contains a line of this
+form:
  (setq inhibit-startup-echo-area-message \"YOUR-USER-NAME\")
 If your init file is byte-compiled, use the following form
 instead:
@@ -544,7 +555,11 @@ It is the default value of the variable `top-level'."
 	    (set-buffer elt)
 	    (if default-directory
 		(setq default-directory
-		      (decode-coding-string default-directory coding t)))))
+                      (if (eq system-type 'windows-nt)
+                          ;; Convert backslashes to forward slashes.
+                          (expand-file-name
+                           (decode-coding-string default-directory coding t))
+                        (decode-coding-string default-directory coding t))))))
 
 	;; Decode all the important variables and directory lists, now
 	;; that we know the locale's encoding.  This is because the
@@ -1426,9 +1441,8 @@ settings will be marked as \"CHANGED outside of Customize\"."
       (put 'cursor 'face-modified t))))
 
 (defcustom initial-scratch-message (purecopy "\
-;; This buffer is for notes you don't want to save, and for Lisp evaluation.
-;; If you want to create a file, visit that file with \\[find-file],
-;; then enter the text in that file's own buffer.
+;; This buffer is for text that is not saved, and for Lisp evaluation.
+;; To create a file, visit it with \\[find-file] and enter text in its buffer.
 
 ")
   "Initial documentation displayed in *scratch* buffer at startup.
@@ -1876,10 +1890,12 @@ we put it on this frame."
       (when frame
 	(let* ((img (create-image (fancy-splash-image-file)))
 	       (image-height (and img (cdr (image-size img nil frame))))
-	       ;; We test frame-height so that, if the frame is split
-	       ;; by displaying a warning, that doesn't cause the normal
-	       ;; splash screen to be used.
-	       (frame-height (1- (frame-height frame))))
+	       ;; We test frame-height and not window-height so that,
+	       ;; if the frame is split by displaying a warning, that
+	       ;; doesn't cause the normal splash screen to be used.
+	       ;; We subtract 2 from frame-height to account for the
+	       ;; echo area and the mode line.
+	       (frame-height (- (frame-height frame) 2)))
 	  (> frame-height (+ image-height 19)))))))
 
 

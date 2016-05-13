@@ -1,6 +1,6 @@
 ;;; apropos.el --- apropos commands for users and programmers
 
-;; Copyright (C) 1989, 1994-1995, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1989, 1994-1995, 2001-2016 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Joe Wells <jbw@bigbird.bu.edu>
@@ -505,8 +505,9 @@ variables, not just user options."
 ;;;###autoload
 (defun apropos-variable (pattern &optional do-not-all)
   "Show variables that match PATTERN.
-When DO-NOT-ALL is non-nil, show user options only, i.e. behave
-like `apropos-user-option'."
+With the optional argument DO-NOT-ALL non-nil (or when called
+interactively with the prefix \\[universal-argument]), show user
+options only, i.e. behave like `apropos-user-option'."
   (interactive (list (apropos-read-pattern
 		      (if current-prefix-arg "user option" "variable"))
                      current-prefix-arg))
@@ -676,6 +677,10 @@ the output includes key-bindings of commands."
 	;; (autoload (push (cdr x) autoloads))
 	(`require (push (cdr x) requires))
 	(`provide (push (cdr x) provides))
+        (`t nil) ; Skip "was an autoload" entries.
+        ;; FIXME: Print information about each individual method: both
+        ;; its docstring and specializers (bug#21422).
+        (`cl-defmethod (push (cadr x) provides))
 	(_ (push (or (cdr-safe x) x) symbols))))
     (let ((apropos-pattern "")) ;Dummy binding for apropos-symbols-internal.
       (apropos-symbols-internal
@@ -823,7 +828,7 @@ Returns list of symbols and documentation found."
 	       (lambda (symbol)
 		 (setq f (apropos-safe-documentation symbol)
 		       v (get symbol 'variable-documentation))
-		 (if (integerp v) (setq v))
+		 (if (integerp v) (setq v nil))
 		 (setq f (apropos-documentation-internal f)
 		       v (apropos-documentation-internal v))
 		 (setq sf (apropos-score-doc f)

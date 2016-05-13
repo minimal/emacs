@@ -1,12 +1,13 @@
 ;;; eudcb-ph.el --- Emacs Unified Directory Client - CCSO PH/QI Backend
 
-;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2016 Free Software Foundation, Inc.
 
 ;; Author: Oscar Figueiredo <oscar@cpe.fr>
 ;;         Pavel Janík <Pavel@Janik.cz>
 ;; Maintainer: Thomas Fitzsimmons <fitzsim@fitzsim.org>
 ;; Keywords: comm
 ;; Package: eudc
+;; Obsolete-since: 25.1
 
 ;; This file is part of GNU Emacs.
 

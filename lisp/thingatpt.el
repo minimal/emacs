@@ -1,6 +1,6 @@
 ;;; thingatpt.el --- get the `thing' at point  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1991-1998, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1991-1998, 2000-2016 Free Software Foundation, Inc.
 
 ;; Author: Mike Williams <mikew@gopher.dosli.govt.nz>
 ;; Maintainer: emacs-devel@gnu.org
@@ -280,8 +280,8 @@ If nil, construct the regexp from `thing-at-point-uri-schemes'.")
     "finger://" "fish://" "ftp://" "geo:" "git://" "go:" "gopher://"
     "h323:" "http://" "https://" "im:" "imap://" "info:" "ipp:"
     "irc://" "irc6://" "ircs://" "iris.beep:" "jar:" "ldap://"
-    "ldaps://" "mailto:" "mid:"  "mtqp://" "mupdate://" "news:"
-    "nfs://" "nntp://" "opaquelocktoken:" "pop://" "pres:"
+    "ldaps://" "magnet:" "mailto:" "mid:"  "mtqp://" "mupdate://"
+    "news:" "nfs://" "nntp://" "opaquelocktoken:" "pop://" "pres:"
     "resource://" "rmi://" "rsync://" "rtsp://" "rtspu://" "service:"
     "sftp://" "sip:" "sips:" "smb://" "sms:" "snmp://" "soap.beep://"
     "soap.beeps://" "ssh://" "svn://" "svn+ssh://" "tag:" "tel:"
@@ -489,19 +489,26 @@ looks like an email address, \"ftp://\" if it starts with
 (defun thing-at-point-looking-at (regexp &optional distance)
   "Return non-nil if point is in or just after a match for REGEXP.
 Set the match data from the earliest such match ending at or after
-point."
+point.
+
+Optional argument DISTANCE limits search for REGEXP forward and
+back from point."
   (save-excursion
     (let ((old-point (point))
 	  (forward-bound (and distance (+ (point) distance)))
 	  (backward-bound (and distance (- (point) distance)))
-	  match)
+	  match prev-pos new-pos)
       (and (looking-at regexp)
 	   (>= (match-end 0) old-point)
 	   (setq match (point)))
       ;; Search back repeatedly from end of next match.
       ;; This may fail if next match ends before this match does.
       (re-search-forward regexp forward-bound 'limit)
-      (while (and (re-search-backward regexp backward-bound t)
+      (setq prev-pos (point))
+      (while (and (setq new-pos (re-search-backward regexp backward-bound t))
+                  ;; Avoid inflooping with some regexps, such as "^",
+                  ;; matching which never moves point.
+                  (< new-pos prev-pos)
 		  (or (> (match-beginning 0) old-point)
 		      (and (looking-at regexp)	; Extend match-end past search start
 			   (>= (match-end 0) old-point)

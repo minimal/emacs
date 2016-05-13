@@ -1,6 +1,6 @@
 ;;; imenu.el --- framework for mode-specific buffer indexes  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1994-1998, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-1998, 2001-2016 Free Software Foundation, Inc.
 
 ;; Author: Ake Stenhoff <etxaksf@aom.ericsson.se>
 ;;         Lars Lindberg <lli@sypro.cap.se>
@@ -509,7 +509,7 @@ If REVERSE is non-nil then the beginning is 100 and the end is 0."
 
 (defun imenu--split (list n)
   "Split LIST into sublists of max length N.
-Example (imenu--split '(1 2 3 4 5 6 7 8) 3)-> '((1 2 3) (4 5 6) (7 8))
+Example (imenu--split \\='(1 2 3 4 5 6 7 8) 3) => ((1 2 3) (4 5 6) (7 8))
 The returned list DOES NOT share structure with LIST."
   (let ((remain list)
 	(result '())

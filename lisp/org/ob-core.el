@@ -1,6 +1,6 @@
 ;;; ob-core.el --- working with code blocks in org-mode
 
-;; Copyright (C) 2009-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2009-2016 Free Software Foundation, Inc.
 
 ;; Authors: Eric Schulte
 ;;	Dan Davison
@@ -1402,7 +1402,7 @@ specified in the properties of the current outline entry."
 ALTS is a cons of two character options where each option may be
 either the numeric code of a single character or a list of
 character alternatives.  For example to split on balanced
-instances of \"[ \t]:\" set ALTS to '((32 9) . 58)."
+instances of \"[ \t]:\" set ALTS to ((32 9) . 58)."
   (let* ((matches (lambda (ch spec) (if (listp spec) (member ch spec) (equal spec ch))))
 	 (matched (lambda (ch last)
 		    (if (consp alts)
@@ -1511,7 +1511,7 @@ shown below.
 
 ;; row and column names
 (defun org-babel-del-hlines (table)
-  "Remove all 'hlines from TABLE."
+  "Remove all `hline's from TABLE."
   (remove 'hline table))
 
 (defun org-babel-get-colnames (table)

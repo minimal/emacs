@@ -1,6 +1,6 @@
 ;;; tramp-cmds.el --- Interactive commands for Tramp
 
-;; Copyright (C) 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2016 Free Software Foundation, Inc.
 
 ;; Author: Michael Albinus <michael.albinus@gmx.de>
 ;; Keywords: comm, processes
@@ -209,7 +209,7 @@ Before reproducing the bug, you might apply
 
   M-x tramp-cleanup-all-connections
 
-This allows to investigate from a clean environment.  Another
+This allows us to investigate from a clean environment.  Another
 useful thing to do is to put
 
   (setq tramp-verbose 9)

@@ -1,6 +1,6 @@
 ;;; loadup.el --- load up standardly loaded Lisp files for Emacs
 
-;; Copyright (C) 1985-1986, 1992, 1994, 2001-2015 Free Software
+;; Copyright (C) 1985-1986, 1992, 1994, 2001-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -47,6 +47,13 @@
 
 ;;; Code:
 
+;; This is used in xdisp.c to determine when bidi reordering is safe.
+;; (It starts non-nil in temacs, but we set it non-nil here anyway, in
+;; case someone loads loadup one more time.)  We reset it after
+;; successfully loading charprop.el, which defines the Unicode tables
+;; bidi.c needs for its job.
+(setq redisplay--inhibit-bidi t)
+
 ;; Add subdirectories to the load-path for files that might get
 ;; autoloaded when bootstrapping.
 ;; This is because PATH_DUMPLOADSEARCH is just "../lisp".
@@ -73,7 +80,7 @@
 
 (if (eq t purify-flag)
     ;; Hash consing saved around 11% of pure space in my tests.
-    (setq purify-flag (make-hash-table :test 'equal :size 70000)))
+    (setq purify-flag (make-hash-table :test 'equal :size 80000)))
 
 (message "Using load-path %s" load-path)
 
@@ -110,6 +117,10 @@
 (load "format")
 (load "bindings")
 (load "window")  ; Needed here for `replace-buffer-in-windows'.
+;; We are now capable of resizing the mini-windows, so give the
+;; variable its advertised default value (it starts as nil, see
+;; xdisp.c).
+(setq resize-mini-windows 'grow-only)
 (setq load-source-file-function 'load-with-code-conversion)
 (load "files")
 
@@ -162,7 +173,8 @@
 (load "case-table")
 ;; This file doesn't exist when building a development version of Emacs
 ;; from the repository.  It is generated just after temacs is built.
-(load "international/charprop.el" t)
+(if (load "international/charprop.el" t)
+    (setq redisplay--inhibit-bidi nil))
 (load "international/characters")
 (load "composite")
 
@@ -276,7 +288,12 @@
 (if (featurep 'ns)
     (progn
       (load "term/common-win")
-      (load "term/ns-win")))
+      ;; Don't load ucs-normalize.el unless uni-*.el files were
+      ;; already produced, because it needs uni-*.el files that might
+      ;; not be built early enough during bootstrap.
+      (when (load-history-filename-element "charprop\\.el")
+        (load "international/ucs-normalize")
+        (load "term/ns-win"))))
 (if (fboundp 'x-create-frame)
     ;; Do it after loading term/foo-win.el since the value of the
     ;; mouse-wheel-*-event vars depends on those files being loaded or not.
@@ -409,6 +426,9 @@ lost after dumping")))
 
 (if (null (garbage-collect))
     (setq pure-space-overflow t))
+
+;; Make sure we will attempt bidi reordering henceforth.
+(setq redisplay--inhibit-bidi nil)
 
 (if (member (car (last command-line-args)) '("dump" "bootstrap"))
     (progn

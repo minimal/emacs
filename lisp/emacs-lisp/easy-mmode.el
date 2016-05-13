@@ -1,6 +1,6 @@
 ;;; easy-mmode.el --- easy definition for major and minor modes
 
-;; Copyright (C) 1997, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997, 2000-2016 Free Software Foundation, Inc.
 
 ;; Author: Georges Brun-Cottan <Georges.Brun-Cottan@inria.fr>
 ;; Maintainer: Stefan Monnier <monnier@gnu.org>
@@ -68,6 +68,7 @@ replacing its case-insensitive matches with the literal string in LIGHTER."
 				     "toggle-\\|-mode\\'" ""
                                      (symbol-name mode))))
 		       " mode")))
+    (setq name (replace-regexp-in-string "\\`Global-" "Global " name))
     (if (not (stringp lighter)) name
       ;; Strip leading and trailing whitespace from LIGHTER.
       (setq lighter (replace-regexp-in-string "\\`\\s-+\\|\\s-+\\'" ""
@@ -148,16 +149,15 @@ BODY contains code to execute each time the mode is enabled or disabled.
 
 For example, you could write
   (define-minor-mode foo-mode \"If enabled, foo on you!\"
-    :lighter \" Foo\" :require 'foo :global t :group 'hassle :version \"27.5\"
+    :lighter \" Foo\" :require \\='foo :global t :group \\='hassle :version \"27.5\"
     ...BODY CODE...)"
   (declare (doc-string 2)
            (debug (&define name string-or-null-p
-                           [&optional [&not keywordp] sexp
-                            &optional [&not keywordp] sexp
-                            &optional [&not keywordp] sexp]
-                           [&rest [keywordp sexp]]
-                           def-body))
-           (indent 1))
+			   [&optional [&not keywordp] sexp
+			    &optional [&not keywordp] sexp
+			    &optional [&not keywordp] sexp]
+			   [&rest [keywordp sexp]]
+			   def-body)))
 
   ;; Allow skipping the first three args.
   (cond
@@ -502,7 +502,7 @@ Valid keywords and arguments are:
   :inherit   Parent keymap.
   :group     Ignored.
   :suppress  Non-nil to call `suppress-keymap' on keymap,
-             'nodigits to suppress digits as prefix arguments."
+             `nodigits' to suppress digits as prefix arguments."
   (let (inherit dense suppress)
     (while args
       (let ((key (pop args))

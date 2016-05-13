@@ -1,5 +1,5 @@
 @c This is part of the Emacs manual.
-@c Copyright (C) 1985-1987, 1993-1995, 1997, 1999-2015 Free Software
+@c Copyright (C) 1985-1987, 1993-1995, 1997, 1999-2016 Free Software
 @c Foundation, Inc.
 @c See file emacs.texi for copying conditions.
 @node Frames
@@ -416,9 +416,9 @@ Start composing a mail message in another frame.  This runs
 @code{compose-mail-other-frame}.  It is the other-frame variant of
 @kbd{C-x m}.  @xref{Sending Mail}.
 @item C-x 5 .
-Find a tag in the current tag table in another frame.  This runs
-@code{find-tag-other-frame}, the multiple-frame variant of @kbd{M-.}.
-@xref{Tags}.
+Find the definition of an identifier in another frame.  This runs
+@code{xref-find-definitions-other-frame}, the multiple-frame variant
+of @kbd{M-.}.  @xref{Xref}.
 @item C-x 5 r @var{filename} @key{RET}
 @kindex C-x 5 r
 @findex find-file-read-only-other-frame
@@ -1152,11 +1152,11 @@ change the variable @code{x-gtk-file-dialog-help-text} to @code{nil}.
 @section Tooltips
 @cindex tooltips
 
-  @dfn{Tooltips} are small windows that display text information at
-the current mouse position.  They activate when there is a pause in
-mouse movement over some significant piece of text in a window, or the
-mode line, or some other part of the Emacs frame such as a tool bar
-button or menu item.
+  @dfn{Tooltips} are small special frames that display text
+information at the current mouse position.  They activate when there
+is a pause in mouse movement over some significant piece of text in a
+window, or the mode line, or some other part of the Emacs frame such
+as a tool bar button or menu item.
 
 @findex tooltip-mode
   You can toggle the use of tooltips with the command @kbd{M-x
@@ -1164,11 +1164,41 @@ tooltip-mode}.  When Tooltip mode is disabled, the help text is
 displayed in the echo area instead.  To control the use of tooltips at
 startup, customize the variable @code{tooltip-mode}.
 
-@vindex tooltip-delay
-  The variables @code{tooltip-delay} specifies how long Emacs should
-wait before displaying a tooltip.  For additional customization
-options for displaying tooltips, use @kbd{M-x customize-group
-@key{RET} tooltip @key{RET}}.
+The following variables provide customization options for tooltip
+display:
+
+@vtable @code
+@item tooltip-delay
+This variable specifies how long Emacs should wait before displaying
+the first tooltip.  The value is in seconds.
+
+@item tooltip-short-delay
+This variable specifies how long Emacs should wait before displaying
+subsequent tooltips on different items, having already displayed the
+first tooltip.  The value is in seconds.
+
+@item tooltip-hide-delay
+The number of seconds since displaying a tooltip to hide it, if the
+mouse doesn't move.
+
+@item tooltip-x-offset
+@itemx tooltip-y-offset
+The X and Y offsets, in pixels, of the left top corner of the tooltip
+from the mouse pointer position.  Note that these are ignored if
+@code{tooltip-frame-parameters} was customized to include,
+respectively, the @code{left} and @code{top} parameters.  The values
+of the offsets should be chosen so that the tooltip doesn't cover the
+mouse pointer's hot spot, or it might interfere with clicking the
+mouse.
+
+@item tooltip-frame-parameters
+The frame parameters used for displaying tooltips.  @xref{Frame
+Parameters,,, elisp, The Emacs Lisp Reference Manual}, and also
+@ref{Tooltips,,, elisp, The Emacs Lisp Reference Manual}.
+@end vtable
+
+For additional customization options for displaying tooltips, use
+@kbd{M-x customize-group @key{RET} tooltip @key{RET}}.
 
 @vindex x-gtk-use-system-tooltips
   If Emacs is built with GTK+ support, it displays tooltips via GTK+,
@@ -1265,16 +1295,20 @@ Some text terminals support mouse clicks in the terminal window.
   In a terminal emulator which is compatible with @command{xterm}, you
 can use @kbd{M-x xterm-mouse-mode} to give Emacs control over simple
 uses of the mouse---basically, only non-modified single clicks are
-supported.  The normal @command{xterm} mouse functionality for such
-clicks is still available by holding down the @kbd{SHIFT} key when you
-press the mouse button.  Xterm Mouse mode is a global minor mode
-(@pxref{Minor Modes}).  Repeating the command turns the mode off
+supported.  Newer versions of @command{xterm} also support
+mouse-tracking.  The normal @command{xterm} mouse functionality for
+such clicks is still available by holding down the @kbd{SHIFT} key
+when you press the mouse button.  Xterm Mouse mode is a global minor
+mode (@pxref{Minor Modes}).  Repeating the command turns the mode off
 again.
 
 @findex gpm-mouse-mode
   In the console on GNU/Linux, you can use @kbd{M-x gpm-mouse-mode} to
 enable mouse support.  You must have the gpm server installed and
-running on your system in order for this to work.
+running on your system in order for this to work.  Note that when
+this mode is enabled, you cannot use the mouse to transfer text
+between Emacs and other programs which use GPM.  This is due to
+limitations in GPM and the Linux kernel.
 
 @iftex
 @xref{MS-DOS Mouse,,,emacs-xtra,Specialized Emacs Features},

@@ -1,6 +1,6 @@
 ;;; battery.el --- display battery status information
 
-;; Copyright (C) 1997-1998, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2000-2016 Free Software Foundation, Inc.
 
 ;; Author: Ralph Schleicher <rs@nunatak.allgaeu.org>
 ;; Keywords: hardware
@@ -628,12 +628,12 @@ The following %-sequences are provided:
 	    (cond ((looking-at "; charging")
 		   (setq battery-status "charging"
 			 battery-status-symbol "+"))
-		  ((< (string-to-number load-percentage) battery-load-low)
-		   (setq battery-status "low"
-			 battery-status-symbol "-"))
 		  ((< (string-to-number load-percentage) battery-load-critical)
 		   (setq battery-status "critical"
 			 battery-status-symbol "!"))
+		  ((< (string-to-number load-percentage) battery-load-low)
+		   (setq battery-status "low"
+			 battery-status-symbol "-"))
 		  (t
 		   (setq battery-status "high"
 			 battery-status-symbol "")))

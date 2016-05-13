@@ -1,6 +1,6 @@
 ;;; ps-print.el --- print text from the buffer as PostScript
 
-;; Copyright (C) 1993-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1993-2016 Free Software Foundation, Inc.
 
 ;; Author: Jim Thompson (was <thompson@wg2.waii.com>)
 ;;	Jacques Duthen (was <duthen@cegelec-red.fr>)
@@ -3232,7 +3232,7 @@ in the PostScript array HeaderLinesLeft.
 
 Strings are inserted unchanged into the array; those representing
 PostScript string literals should be delimited with PostScript string
-delimiters '(' and ')'.
+delimiters `(' and `)'.
 
 For symbols with bound functions, the function is called and should return a
 string to be inserted into the array.  For symbols with bound values, the value
@@ -3286,8 +3286,8 @@ The value should be a list of strings and symbols, each representing an entry
 in the PostScript array FooterLinesLeft.
 
 Strings are inserted unchanged into the array; those representing PostScript
-string literals should be delimited with PostScript string delimiters '(' and
-')'.
+string literals should be delimited with PostScript string delimiters `(' and
+`)'.
 
 For symbols with bound functions, the function is called and should return a
 string to be inserted into the array.  For symbols with bound values, the value
@@ -3601,7 +3601,7 @@ image in a file with that name."
 (defun ps-line-lengths ()
   "Display the correspondence between a line length and a font size.
 Done using the current ps-print setup.
-Try: pr -t file | awk '{printf \"%3d %s\n\", length($0), $0}' | sort -r | head"
+Try: pr -t file | awk \\='{printf \"%3d %s\n\", length($0), $0}\\=' | sort -r | head"
   (interactive)
   (ps-line-lengths-internal))
 
@@ -4308,7 +4308,7 @@ which long lines wrap around."
 (defun ps-line-lengths-internal ()
   "Display the correspondence between a line length and a font size.
 Done using the current ps-print setup.
-Try: pr -t file | awk '{printf \"%3d %s\n\", length($0), $0}' | sort -r | head"
+Try: pr -t file | awk \\='{printf \"%3d %s\n\", length($0), $0}\\=' | sort -r | head"
   (let* ((ps-font-size-internal
 	  (or ps-font-size-internal
 	      (ps-get-font-size 'ps-font-size)))
@@ -4759,7 +4759,11 @@ page-height == ((floor print-height ((th + ls) * zh)) * ((th + ls) * zh)) - th
    ;; Literal strings should be output as is -- the string must contain its own
    ;; PS string delimiters, '(' and ')', if necessary.
    ((stringp content)
-    (ps-output content))
+    (if (functionp ps-encode-header-string-function)
+        (dolist (elem (funcall ps-encode-header-string-function
+                               content fonttag))
+	  (ps-output elem))
+      (ps-output content)))
 
    ;; Functions are called -- they should return strings; they will be inserted
    ;; as strings and the PS string delimiters added.
@@ -4775,7 +4779,7 @@ page-height == ((floor print-height ((th + ls) * zh)) * ((th + ls) * zh)) - th
    ((and (symbolp content) (boundp content))
     (if (fboundp ps-encode-header-string-function)
 	(dolist (l (funcall ps-encode-header-string-function
-			     (symbol-value content) fonttag))
+                            (symbol-value content) fonttag))
 	  (ps-output-string l))
       (ps-output-string (symbol-value content))))
 
@@ -6589,7 +6593,7 @@ If FACE is not a valid face name, use default face."
 ;; To make this file smaller, some commands go in a separate file.
 ;; But autoload them here to make the separation invisible.
 
-;;;### (autoloads nil "ps-mule" "ps-mule.el" "231b07356e5a37ebf517c613a3a12bba")
+;;;### (autoloads nil "ps-mule" "ps-mule.el" "4a263b7a727e853f2e6672922c4e5755")
 ;;; Generated autoloads from ps-mule.el
 
 (defvar ps-multibyte-buffer nil "\

@@ -28,15 +28,15 @@ OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-Copyright (C) 1984, 1987-1989, 1993-1995, 1998-2015 Free Software
+Copyright (C) 1984, 1987-1989, 1993-1995, 1998-2016 Free Software
 Foundation, Inc.
 
 This file is not considered part of GNU Emacs.
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -613,8 +613,8 @@ static const char *Objc_suffixes [] =
 static const char Objc_help [] =
 "In Objective C code, tags include Objective C definitions for classes,\n\
 class categories, methods and protocols.  Tags for variables and\n\
-functions in classes are named `CLASS::VARIABLE' and `CLASS::FUNCTION'.\n\
-(Use --help --lang=c --lang=objc --lang=java for full help.)";
+functions in classes are named `CLASS::VARIABLE' and `CLASS::FUNCTION'.\
+\n(Use --help --lang=c --lang=objc --lang=java for full help.)";
 
 static const char *Pascal_suffixes [] =
   { "p", "pas", NULL };

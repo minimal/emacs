@@ -1,6 +1,6 @@
 ;;; indent.el --- indentation commands for Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1985, 1995, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1995, 2001-2016 Free Software Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
 ;; Package: emacs
@@ -610,7 +610,7 @@ See also `indent-relative-maybe'."
   "List of tab stop positions used by `tab-to-tab-stop'.
 This should be nil, or a list of integers, ordered from smallest to largest.
 It implicitly extends to infinity through repetition of the last step.
-For example, '(1 2 5) is equivalent to '(1 2 5 8 11 ...).  If the list has
+For example, (1 2 5) is equivalent to (1 2 5 8 11 ...).  If the list has
 fewer than 2 elements, `tab-width' is used as the \"last step\".
 A value of nil means a tab stop every `tab-width' columns."
   :group 'indent

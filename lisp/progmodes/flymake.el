@@ -1,6 +1,6 @@
 ;;; flymake.el --- a universal on-the-fly syntax checker  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2003-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2016 Free Software Foundation, Inc.
 
 ;; Author:  Pavel Kobyakov <pk_at_work@yahoo.com>
 ;; Maintainer: Leo Liu <sdl.web@gmail.com>
@@ -989,7 +989,7 @@ For the format of LINE-ERR-INFO, see `flymake-ler-make-ler'."
   (funcall flymake-get-project-include-dirs-function basedir))
 
 (defun flymake-get-system-include-dirs ()
-  "System include dirs - from the 'INCLUDE' env setting."
+  "System include dirs - from the `INCLUDE' env setting."
   (let* ((includes (getenv "INCLUDE")))
     (if includes (split-string includes path-separator t) nil)))
 

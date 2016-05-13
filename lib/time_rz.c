@@ -1,6 +1,6 @@
 /* Time zone functions such as tzalloc and localtime_rz
 
-   Copyright 2015 Free Software Foundation, Inc.
+   Copyright 2015-2016 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -46,8 +46,6 @@ enum { DEFAULT_MXFAST = 64 * sizeof (size_t) / 4 };
    only in the unlikely case where an abbreviation longer than this is
    used.  */
 enum { ABBR_SIZE_MIN = DEFAULT_MXFAST - offsetof (struct tm_zone, abbrs) };
-
-static char const TZ[] = "TZ";
 
 /* Magic cookie timezone_t value, for local time.  It differs from
    NULL and from all other timezone_t values.  Only the address
@@ -205,7 +203,7 @@ tzfree (timezone_t tz)
 static char *
 getenv_TZ (void)
 {
-  return getenv (TZ);
+  return getenv ("TZ");
 }
 #endif
 
@@ -213,7 +211,7 @@ getenv_TZ (void)
 static int
 setenv_TZ (char const *tz)
 {
-  return tz ? setenv (TZ, tz, 1) : unsetenv (TZ);
+  return tz ? setenv ("TZ", tz, 1) : unsetenv ("TZ");
 }
 #endif
 

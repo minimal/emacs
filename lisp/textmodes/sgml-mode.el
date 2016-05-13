@@ -1,6 +1,6 @@
 ;;; sgml-mode.el --- SGML- and HTML-editing modes -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992, 1995-1996, 1998, 2001-2015 Free Software
+;; Copyright (C) 1992, 1995-1996, 1998, 2001-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Author: James Clark <jjc@jclark.com>
@@ -697,7 +697,7 @@ This only works for Latin-1 input."
   "Prompt for a tag and insert it, optionally with attributes.
 Completion and configuration are done according to `sgml-tag-alist'.
 If you like tags and attributes in uppercase, customize
-`sgml-transformation-function' to 'upcase."
+`sgml-transformation-function' to `upcase'."
   (funcall (or skeleton-transformation-function 'identity)
            (setq sgml-tag-last
 		 (completing-read

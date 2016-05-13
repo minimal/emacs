@@ -1,6 +1,6 @@
 ;;; checkdoc.el --- check documentation strings for style requirements  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1997-1998, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1998, 2001-2016 Free Software Foundation, Inc.
 
 ;; Author: Eric M. Ludlam <zappo@gnu.org>
 ;; Version: 0.6.2
@@ -270,6 +270,7 @@ made in the style guide relating to order."
 (defcustom checkdoc-package-keywords-flag nil
   "Non-nil means warn if this file's package keywords are not recognized.
 Currently, all recognized keywords must be on `finder-known-keywords'."
+  :version "25.1"
   :type 'boolean)
 
 (define-obsolete-variable-alias 'checkdoc-style-hooks
@@ -1579,7 +1580,7 @@ mouse-[0-3]\\)\\)\\>"))
 	     (if (and sym (boundp sym) (fboundp sym)
 		      (save-excursion
 			(goto-char mb)
-			(forward-word -1)
+			(forward-word-strictly -1)
 			(not (looking-at
 			      "variable\\|option\\|function\\|command\\|symbol"))))
 		 (if (checkdoc-autofix-ask-replace
@@ -1595,7 +1596,7 @@ mouse-[0-3]\\)\\)\\>"))
 			     nil t nil nil "variable")))
 		       (goto-char (1- mb))
 		       (insert disambiguate " ")
-		       (forward-word 1))
+		       (forward-word-strictly 1))
 		   (setq ret
 			 (format "Disambiguate %s by preceding w/ \
 function,command,variable,option or symbol." ms1))))))

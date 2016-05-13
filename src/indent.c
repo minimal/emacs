@@ -1,13 +1,13 @@
 /* Indentation functions.
-   Copyright (C) 1985-1988, 1993-1995, 1998, 2000-2015 Free Software
+   Copyright (C) 1985-1988, 1993-1995, 1998, 2000-2016 Free Software
    Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -2036,7 +2036,7 @@ whether or not it is currently displayed in some window.  */)
       bool disp_string_at_start_p = 0;
       ptrdiff_t nlines = XINT (lines);
       int vpos_init = 0;
-      double start_col;
+      double start_col IF_LINT (= 0);
       int start_x IF_LINT (= 0);
       int to_x = -1;
 
@@ -2080,11 +2080,7 @@ whether or not it is currently displayed in some window.  */)
 	}
       else
 	it_overshoot_count =
-	  (!(it.method == GET_FROM_IMAGE
-	     || it.method == GET_FROM_STRETCH)
-	    /* We will overshoot if lines are truncated and PT lies
-	       beyond the right margin of the window.  */
-	    || it.line_wrap == TRUNCATE);
+	  !(it.method == GET_FROM_IMAGE || it.method == GET_FROM_STRETCH);
 
       if (start_x_given)
 	{
@@ -2134,6 +2130,15 @@ whether or not it is currently displayed in some window.  */)
 	      && it.method == GET_FROM_BUFFER
 	      && it.c == '\n')
 	    it_overshoot_count = 1;
+	  else if (it_overshoot_count == 1 && it.vpos == 0
+		   && it.current_x < it.last_visible_x)
+	    {
+	      /* If we came to the same screen line as the one where
+		 we started, we didn't overshoot the line, and won't
+		 need to backtrack after all.  This happens, for
+		 example, when PT is in the middle of a composition.  */
+	      it_overshoot_count = 0;
+	    }
 	  else if (disp_string_at_start_p && it.vpos > 0)
 	    {
 	      /* This is the case of a display string that spans
@@ -2142,6 +2147,11 @@ whether or not it is currently displayed in some window.  */)
 		 screen lines we need to backtrack.  */
 	      it_overshoot_count = it.vpos;
 	    }
+	  /* We will overshoot if lines are truncated and point lies
+	     beyond the right margin of the window.  */
+	  if (it.line_wrap == TRUNCATE && it.current_x >= it.last_visible_x
+	      && it_overshoot_count == 0)
+	    it_overshoot_count = 1;
 	  if (it_overshoot_count > 0)
 	    move_it_by_lines (&it, -it_overshoot_count);
 

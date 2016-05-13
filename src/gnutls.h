@@ -1,12 +1,12 @@
 /* GnuTLS glue for GNU Emacs.
-   Copyright (C) 2010-2015 Free Software Foundation, Inc.
+   Copyright (C) 2010-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -83,6 +83,7 @@ extern ptrdiff_t emacs_gnutls_record_check_pending (gnutls_session_t state);
 extern void emacs_gnutls_transport_set_errno (gnutls_session_t state, int err);
 #endif
 extern Lisp_Object emacs_gnutls_deinit (Lisp_Object);
+extern Lisp_Object emacs_gnutls_global_init (void);
 
 #endif
 

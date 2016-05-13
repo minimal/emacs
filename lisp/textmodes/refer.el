@@ -1,6 +1,6 @@
 ;;; refer.el --- look up references in bibliography files
 
-;; Copyright (C) 1992, 1996, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992, 1996, 2001-2016 Free Software Foundation, Inc.
 
 ;; Author: Ashwin Ram <ashwin@cc.gatech.edu>
 ;; Maintainer: Gernot Heiser <gernot@acm.org>
@@ -77,13 +77,13 @@
 
 (defcustom refer-bib-directory nil
   "Directory, or list of directories, to search for \\.bib files.
-Can be set to 'bibinputs or 'texinputs, in which case the environment
+Can be set to `bibinputs' or `texinputs', in which case the environment
 variable BIBINPUTS or TEXINPUTS, respectively, is used to obtain a
-list of directories.  Useful only if `refer-bib-files' is set to 'dir or
+list of directories.  Useful only if `refer-bib-files' is set to `dir' or
 a list of file names (without directory).  A value of nil indicates the
 current working directory.
 
-If `refer-bib-directory' is 'bibinputs or 'texinputs, it is setq'd to
+If `refer-bib-directory' is `bibinputs' or `texinputs', it is setq'd to
 the appropriate list of directories when it is first used.
 
 Note that an empty directory is interpreted by BibTeX as indicating

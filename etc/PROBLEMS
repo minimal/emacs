@@ -1,6 +1,7 @@
 Known Problems with GNU Emacs
 
-Copyright (C) 1987-1989, 1993-1999, 2001-2015 Free Software Foundation, Inc.
+Copyright (C) 1987-1989, 1993-1999, 2001-2016 Free Software Foundation,
+Inc.
 See the end of the file for license conditions.
 
 
@@ -458,11 +459,9 @@ smart.  It sees that the Shell uses terminal type 'unknown' and turns
 on the flag to output ^M at the end of each line.  You can fix the
 problem by adding this to your .cshrc file:
 
-    if ($?EMACS) then
-        if ("$EMACS" =~ /*) then
-            unset edit
-            stty  -icrnl -onlcr -echo susp ^Z
-        endif
+    if ($?INSIDE_EMACS && $?tcsh)
+        unset edit
+        stty -icrnl -onlcr -echo susp ^Z
     endif
 
 *** Emacs startup on GNU/Linux systems (and possibly other systems) is slow.
@@ -598,6 +597,17 @@ If your spell-checking program is Aspell, it has been reported that if
 you have a personal configuration file (normally ~/.aspell.conf), it
 can cause this error.  Remove that file, execute 'ispell-kill-ispell'
 in Emacs, and then try spell-checking again.
+
+*** Emacs eats all file descriptors when using kqueue file notifications.
+See <http://debbugs.gnu.org/22814>.
+
+When you have a large number of buffers running auto-revert-mode, and
+Emacs is configured to use the kqueue file notification library, it
+uses an own file descriptor for every watched file.  On systems with a
+small limit of file descriptors allowed per process, like OS X, you
+could run out of file descriptors.  You won't be able to open new files.
+
+auto-revert-use-notify is set to nil in global-auto-revert-mode, therefore.
 
 * Runtime problems related to font handling
 
@@ -1965,6 +1975,13 @@ runtime shared library, distributed with Windows 9X.
 A workaround is to build Emacs with MinGW runtime 3.x (the latest
 version is 3.20).
 
+** addpm fails to run on Windows NT4, complaining about Shell32.dll
+
+This is likely to happen because Shell32.dll shipped with NT4 lacks
+the updates required by Emacs.  Installing Internet Explorer 4 solves
+the problem.  Note that it is NOT enough to install IE6, because doing
+so will not install the Shell32.dll update.
+
 ** A few seconds delay is seen at startup and for many file operations
 
 This happens when the Net Logon service is enabled.  During Emacs
@@ -2050,6 +2067,10 @@ are allowed to use the clipboard when the Web browser is open.
 pinned icon, a separate button appears on the taskbar, instead of the
 expected effect of the icon you clicked on being converted to that
 button.
+
+This is due to a bug in early versions of Windows 10, reportedly fixed
+in build 1511 of Windows 10 (a.k.a. "Windows 10 SP1").  If you cannot
+upgrade, read the work-around described below.
 
 First, be sure to edit the Properties of the pinned icon to invoke
 runemacs.exe, not emacs.exe.  (The latter will cause an extra cmd
@@ -2199,11 +2220,11 @@ month names with consistent widths for some locales on some versions
 of Windows.  This is caused by a deficiency in the underlying system
 library function.
 
-** Problems with set-time-zone-rule function
+** Non-US time zones.
 
-The function set-time-zone-rule gives incorrect results for many
-non-US timezones.  This is due to over-simplistic handling of
-daylight savings switchovers by the Windows libraries.
+Many non-US time zones are implemented incorrectly.  This is due to
+over-simplistic handling of daylight savings switchovers by the
+Windows libraries.
 
 ** Files larger than 4GB report wrong size in a 32-bit Windows build
 

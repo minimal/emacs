@@ -1,6 +1,6 @@
 ;;; complete.el --- partial completion mechanism plus other goodies
 
-;; Copyright (C) 1990-1993, 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1990-1993, 1999-2016 Free Software Foundation, Inc.
 
 ;; Author: Dave Gillespie <daveg@synaptics.com>
 ;; Keywords: abbrev convenience
@@ -1074,7 +1074,7 @@ absolute rather than relative to some directory on the SEARCH-PATH."
 	  (setq search-path
 		(mapcar (lambda (dir) (concat dir subdir))
 			search-path)
-		file ))
+		file nil))
       ;; Make list of completions in each directory on search-path
       (while search-path
 	(let* ((dir (car search-path))

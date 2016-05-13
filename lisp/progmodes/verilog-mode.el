@@ -1,6 +1,6 @@
 ;;; verilog-mode.el --- major mode for editing verilog source in Emacs
 
-;; Copyright (C) 1996-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2016 Free Software Foundation, Inc.
 
 ;; Author: Michael McNamara <mac@verilog.com>
 ;;    Wilson Snyder <wsnyder@wsnyder.org>
@@ -750,7 +750,7 @@ Set this to \"logic\" for SystemVerilog code, or use `verilog-auto-logic'."
 (put 'verilog-auto-wire-type 'safe-local-variable `stringp)
 
 (defcustom verilog-auto-endcomments t
-  "Non-nil means insert a comment /* ... */ after 'end's.
+  "Non-nil means insert a comment /* ... */ after `end's.
 The name of the function or case will be set between the braces."
   :group 'verilog-mode-actions
   :type 'boolean)
@@ -790,7 +790,7 @@ needed on every save.  A value of `detect' will do \\[verilog-auto]
 automatically when it thinks necessary.  A value of `ask' will query the
 user when it thinks updating is needed.
 
-You should not rely on the 'ask or 'detect policies, they are safeguards
+You should not rely on the `ask' or `detect' policies, they are safeguards
 only.  They do not detect when AUTOINSTs need to be updated because a
 sub-module's port list has changed."
   :group 'verilog-mode-actions
@@ -3454,7 +3454,7 @@ Use filename, if current buffer being edited shorten to just buffer name."
 	(found nil)
 	(st (point)))
     (if (not (looking-at "\\<"))
-	(forward-word -1))
+	(forward-word-strictly -1))
     (cond
      ((verilog-skip-backward-comment-or-string))
      ((looking-at "\\<else\\>")
@@ -3506,7 +3506,7 @@ Use filename, if current buffer being edited shorten to just buffer name."
 	(st (point))
 	(nest 'yes))
     (if (not (looking-at "\\<"))
-	(forward-word -1))
+	(forward-word-strictly -1))
     (cond
      ((verilog-skip-forward-comment-or-string)
       (verilog-forward-syntactic-ws))
@@ -3529,11 +3529,11 @@ Use filename, if current buffer being edited shorten to just buffer name."
 	       (and (looking-at "fork")
 		    (progn
                       (setq here (point))  ; sometimes a fork is just a fork
-		      (forward-word -1)
+		      (forward-word-strictly -1)
 		      (looking-at verilog-disable-fork-re))))
               (progn  ; it is a disable fork; ignore it
 		(goto-char (match-end 0))
-		(forward-word 1)
+		(forward-word-strictly 1)
 		(setq reg nil))
             (progn  ; it is a nice simple fork
               (goto-char here)   ; return from looking for "disable fork"
@@ -3583,7 +3583,7 @@ Use filename, if current buffer being edited shorten to just buffer name."
         ;; Search forward for matching endclocking
         (setq reg "\\(\\<clocking\\>\\)\\|\\(\\<endclocking\\>\\)" )))
       (if (and reg
-	       (forward-word 1))
+	       (forward-word-strictly 1))
 	  (catch 'skip
 	    (if (eq nest 'yes)
 		(let ((depth 1)
@@ -3602,7 +3602,7 @@ Use filename, if current buffer being edited shorten to just buffer name."
 			     (looking-at verilog-disable-fork-re)
 			     (and (looking-at "fork")
 				  (progn
-				    (forward-word -1)
+				    (forward-word-strictly -1)
 				    (looking-at verilog-disable-fork-re))))
                             (progn  ; it is a disable fork; another false alarm
 			      (goto-char (match-end 0)))
@@ -3717,12 +3717,12 @@ Variables controlling indentation/edit style:
    will be inserted.  Setting this variable to zero results in every
    end acquiring a comment; the default avoids too many redundant
    comments in tight quarters.
- `verilog-auto-lineup'              (default 'declarations)
+ `verilog-auto-lineup'              (default `declarations')
    List of contexts where auto lineup of code should be done.
 
 Variables controlling other actions:
 
- `verilog-linter'                   (default surelint)
+ `verilog-linter'                   (default `surelint')
    Unix program to call to run the lint checker.  This is the default
    command for \\[compile-command] and \\[verilog-auto-save-compile].
 
@@ -4073,7 +4073,7 @@ The upper left corner is defined by point.  Indices begin with 0
 and extend to the MAX - 1.  If no prefix arg is given, the user
 is prompted for a value.  The indices are surrounded by square
 brackets [].  For example, the following code with the point
-located after the first 'a' gives:
+located after the first `a' gives:
 
     a = b                           a[  0] = b
     a = b                           a[  1] = b
@@ -4276,7 +4276,7 @@ Uses `verilog-scan' cache."
 	      ;; stop if we see a named coverpoint
 	      (looking-at "\\w+\\W*:\\W*\\(coverpoint\\|cross\\|constraint\\)")
 	      ;; keep going if we are in the middle of a word
-	      (not (or (looking-at "\\<") (forward-word -1)))
+	      (not (or (looking-at "\\<") (forward-word-strictly -1)))
 	      ;; stop if we see an assertion (perhaps labeled)
 	      (and
 	       (looking-at "\\(\\w+\\W*:\\W*\\)?\\(\\<\\(assert\\|assume\\|cover\\)\\>\\s-+\\<property\\>\\)\\|\\(\\<assert\\>\\)")
@@ -4825,7 +4825,7 @@ primitive or interface named NAME."
 
                              ((looking-at "\\<end\\>")
                               ;; HERE
-                              (forward-word 1)
+                              (forward-word-strictly 1)
                               (verilog-forward-syntactic-ws)
                               (setq err nil)
                               (setq str (verilog-get-expr))
@@ -5940,7 +5940,7 @@ Set point to where line starts."
       (verilog-backward-up-list 1)
       (verilog-backward-syntactic-ws)
       (let ((back (point)))
-	(forward-word -1)
+	(forward-word-strictly -1)
 	(cond
 	 ;;XX
 	 ((looking-at "\\<\\(always\\(_latch\\|_ff\\|_comb\\)?\\|case\\(\\|[xz]\\)\\|for\\(\\|each\\|ever\\)\\|i\\(f\\|nitial\\)\\|repeat\\|while\\)\\>")
@@ -5981,11 +5981,11 @@ Set point to where line starts."
 
    (;-- any of begin|initial|while are complete statements; 'begin : foo' is also complete
     t
-    (forward-word -1)
+    (forward-word-strictly -1)
     (while (or (= (preceding-char) ?\_)
                (= (preceding-char) ?\@)
                (= (preceding-char) ?\.))
-      (forward-word -1))
+      (forward-word-strictly -1))
     (cond
      ((looking-at "\\<else\\>")
       t)
@@ -6499,7 +6499,7 @@ Only look at a few lines to determine indent level."
 				  (= (following-char) ?\`))
 			     (progn
 			       (forward-char 1)
-			       (forward-word 1)
+			       (forward-word-strictly 1)
 			       (skip-chars-forward " \t")))
 			    ((= (following-char) ?\[)
 			     (progn
@@ -12899,7 +12899,7 @@ used on the right hand side of assignments.
 By default, AUTORESET will include the width of the signal in the
 autos, SystemVerilog designs may want to change this.  To control
 this behavior, see `verilog-auto-reset-widths'.  In some cases
-AUTORESET must use a '0 assignment and it will print NOWIDTH; use
+AUTORESET must use a \\='0 assignment and it will print NOWIDTH; use
 `verilog-auto-reset-widths' unbased to prevent this.
 
 AUTORESET ties signals to deasserted, which is presumed to be zero.

@@ -1,6 +1,6 @@
 ;;; server.el --- Lisp code for GNU Emacs running as server process -*- lexical-binding: t -*-
 
-;; Copyright (C) 1986-1987, 1992, 1994-2015 Free Software Foundation,
+;; Copyright (C) 1986-1987, 1992, 1994-2016 Free Software Foundation,
 ;; Inc.
 
 ;; Author: William Sommerfeld <wesommer@athena.mit.edu>
@@ -1172,7 +1172,7 @@ The following commands are accepted by the client:
                    ;; Allow Cygwin's emacsclient to be used as a file
                    ;; handler on MS-Windows, in which case FILENAME
                    ;; might start with a drive letter.
-                   (when (and (eq system-type 'cygwin)
+                   (when (and (fboundp 'cygwin-convert-file-name-from-windows)
                               (string-match "\\`[A-Za-z]:" file))
                      (setq file (cygwin-convert-file-name-from-windows file)))
                    (setq file (expand-file-name file dir))

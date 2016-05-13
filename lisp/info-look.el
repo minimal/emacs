@@ -1,7 +1,7 @@
 ;;; info-look.el --- major-mode-sensitive Info index lookup facility -*- lexical-binding: t -*-
 ;; An older version of this was known as libc.el.
 
-;; Copyright (C) 1995-1999, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1995-1999, 2001-2016 Free Software Foundation, Inc.
 
 ;; Author: Ralph Schleicher <rs@nunatak.allgaeu.org>
 ;;         (did not show signs of life (Nov 2001)  -stef)
@@ -912,7 +912,9 @@ Return nil if there is nothing appropriate in the buffer near point."
              ;; for things that should go to Function: etc, and those latter
              ;; are much more important.  Perhaps this could change if some
              ;; sort of fallback match scheme existed.
-             ("(elisp)Index"          nil "^ -+ .*: " "\\( \\|$\\)")))
+             ("(elisp)Index"          nil "^ -+ .*: " "\\( \\|$\\)")
+             ("(cl)Function Index"    nil "^ -+ .*: " "\\( \\|$\\)")
+             ("(cl)Variable Index"    nil "^ -+ .*: " "\\( \\|$\\)")))
 
 ;; docstrings talk about elisp, so have apropos-mode follow emacs-lisp-mode
 (info-lookup-maybe-add-help

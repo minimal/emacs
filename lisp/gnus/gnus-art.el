@@ -1,6 +1,6 @@
 ;;; gnus-art.el --- article mode commands for Gnus
 
-;; Copyright (C) 1996-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-2016 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;; Keywords: news
@@ -260,7 +260,7 @@ This can also be a list of the above values."
   ;; needed there.  And XEmacs doesn't handle `intangible' anyway.
   '(invisible t)
   "Property list to use for hiding text."
-  :type 'sexp
+  :type 'plist
   :group 'gnus-article-hiding)
 
 ;; Fixme: This isn't the right thing for mixed graphical and non-graphical
@@ -526,6 +526,12 @@ each invocation of the saving commands."
   :type '(choice (item always)
 		 (item :tag "never" nil)
 		 (sexp :tag "once" :format "%t\n" :value t)))
+
+(defcustom gnus-article-show-cursor nil
+  "If non-nil, show the cursor in the Article buffer even when not selected."
+  :version "25.1"
+  :group 'gnus-article
+  :type 'bool)
 
 (defcustom gnus-saved-headers gnus-visible-headers
   "Headers to keep if `gnus-save-all-headers' is nil.
@@ -1022,7 +1028,7 @@ on parts -- for instance, adding Vcard info to a database."
 
 (defcustom gnus-article-date-headers '(combined-lapsed)
   "A list of Date header formats to display.
-Valid formats are `ut' (universal time), `local' (local time
+Valid formats are `ut' (Universal Time), `local' (local time
 zone), `english' (readable English), `lapsed' (elapsed time),
 `combined-lapsed' (both the original date and the elapsed time),
 `original' (the original date header), `iso8601' (ISO8601
@@ -1659,7 +1665,9 @@ called with the group name as the parameter, and should return a
 regexp."
   :version "24.1"
   :group 'gnus-art
-  :type '(choice regexp function))
+  :type '(choice (const :tag "Allow all" nil)
+                 (regexp :tag "Regular expression")
+                 (function :tag "Use a function")))
 
 ;;; Internal variables
 
@@ -2256,8 +2264,7 @@ This only works if the article in question is HTML."
     (save-restriction
       (widen)
       (if (eq mm-text-html-renderer 'w3m)
-	  (let ((mm-inline-text-html-with-images nil))
-	    (w3m-toggle-inline-images))
+	  (w3m-toggle-inline-images)
 	(dolist (region (gnus-find-text-property-region (point-min) (point-max)
 							'image-displayer))
 	  (destructuring-bind (start end function) region
@@ -4520,7 +4527,8 @@ commands:
   (set (make-local-variable 'nobreak-char-display) nil)
   ;; Enable `gnus-article-remove-images' to delete images shr.el renders.
   (set (make-local-variable 'shr-put-image-function) 'gnus-shr-put-image)
-  (setq cursor-in-non-selected-windows nil)
+  (unless gnus-article-show-cursor
+    (setq cursor-in-non-selected-windows nil))
   (gnus-set-default-directory)
   (buffer-disable-undo)
   (setq buffer-read-only t
@@ -4927,25 +4935,30 @@ General format specifiers can also be used.  See Info node
 		(vector (caddr c) (car c) :active t))
 	      gnus-url-button-commands)))
 
-(defmacro gnus-bind-safe-url-regexp (&rest body)
-  "Bind `mm-w3m-safe-url-regexp' according to `gnus-safe-html-newsgroups'."
-  `(let ((mm-w3m-safe-url-regexp
-	  (let ((group (if (and (derived-mode-p 'gnus-article-mode)
-				(gnus-buffer-live-p
-				 gnus-article-current-summary))
-			   (with-current-buffer gnus-article-current-summary
-			     gnus-newsgroup-name)
-			 gnus-newsgroup-name)))
-	    (if (cond ((not group)
-		       ;; Maybe we're in a mml-preview buffer
-		       ;; and no group is selected.
-		       t)
-		      ((stringp gnus-safe-html-newsgroups)
-		       (string-match gnus-safe-html-newsgroups group))
-		      ((consp gnus-safe-html-newsgroups)
-		       (member group gnus-safe-html-newsgroups)))
-		nil
-	      mm-w3m-safe-url-regexp))))
+(defmacro gnus-bind-mm-vars (&rest body)
+  "Bind some mm-* variables and execute BODY."
+  `(let (mm-html-inhibit-images
+	 mm-html-blocked-images
+	 (mm-w3m-safe-url-regexp mm-w3m-safe-url-regexp))
+     (with-current-buffer
+	 (cond ((derived-mode-p 'gnus-article-mode)
+		(if (gnus-buffer-live-p gnus-article-current-summary)
+		    gnus-article-current-summary
+		  ;; Maybe we're in a mml-preview buffer
+		  ;; and no group is selected.
+		  (current-buffer)))
+	       ((gnus-buffer-live-p gnus-summary-buffer)
+		gnus-summary-buffer)
+	       (t (current-buffer)))
+       (setq mm-html-inhibit-images gnus-inhibit-images
+	     mm-html-blocked-images (gnus-blocked-images))
+       (when (or (not gnus-newsgroup-name)
+		 (and (stringp gnus-safe-html-newsgroups)
+		      (string-match gnus-safe-html-newsgroups
+				    gnus-newsgroup-name))
+		 (and (consp gnus-safe-html-newsgroups)
+		      (member gnus-newsgroup-name gnus-safe-html-newsgroups)))
+	 (setq mm-w3m-safe-url-regexp nil)))
      ,@body))
 
 (defun gnus-mime-button-menu (event prefix)
@@ -4973,7 +4986,7 @@ General format specifiers can also be used.  See Info node
 	(or (search-forward "\n\n") (goto-char (point-max)))
 	(let ((inhibit-read-only t))
 	  (delete-region (point) (point-max))
-	  (gnus-bind-safe-url-regexp (mm-display-parts handles)))))))
+	  (gnus-bind-mm-vars (mm-display-parts handles)))))))
 
 (defun gnus-article-jump-to-part (n)
   "Jump to MIME part N."
@@ -5512,8 +5525,7 @@ If no internal viewer is available, use an external viewer."
         (gnus-mime-view-part-as-type
          nil (lambda (type) (mm-inlinable-p handle type)))
       (when handle
-	(gnus-bind-safe-url-regexp
-	 (mm-display-part handle nil t))))))
+	(gnus-bind-mm-vars (mm-display-part handle nil t))))))
 
 (defun gnus-mime-action-on-part (&optional action)
   "Do something with the MIME attachment at (point)."
@@ -5743,7 +5755,7 @@ all parts."
 				 (mm-inlined-p handle)
 				 t)
 			    (with-temp-buffer
-			      (gnus-bind-safe-url-regexp
+			      (gnus-bind-mm-vars
 			       (setq retval (mm-display-part handle)))
 			      (unless (zerop (buffer-size))
 				(buffer-string))))))
@@ -6104,7 +6116,7 @@ If nil, don't show those extra buttons."
 				       (set-buffer gnus-summary-buffer)
 				     (error))
 				   gnus-newsgroup-ignored-charsets)))
-	      (gnus-bind-safe-url-regexp (mm-display-part handle t))))
+	      (gnus-bind-mm-vars (mm-display-part handle t))))
 	   ((and text not-attachment)
 	    (mm-display-inline handle)))
 	  (goto-char (point-max))
@@ -6234,7 +6246,7 @@ If nil, don't show those extra buttons."
 		  (mail-parse-ignored-charsets
 		   (with-current-buffer gnus-summary-buffer
 		     gnus-newsgroup-ignored-charsets)))
-	      (gnus-bind-safe-url-regexp (mm-display-part preferred))
+	      (gnus-bind-mm-vars (mm-display-part preferred))
 	      ;; Do highlighting.
 	      (save-excursion
 		(save-restriction

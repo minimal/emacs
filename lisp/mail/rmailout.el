@@ -1,6 +1,6 @@
 ;;; rmailout.el --- "RMAIL" mail reader for Emacs: output message to a file
 
-;; Copyright (C) 1985, 1987, 1993-1994, 2001-2015 Free Software
+;; Copyright (C) 1985, 1987, 1993-1994, 2001-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -84,13 +84,14 @@ This uses `rmail-output-file-alist'."
 					(eval (cdar tail))
 				      (error
 				       (display-warning
-					:error
+					'rmail-output
 					(format-message "\
 Error evaluating `rmail-output-file-alist' element:
 regexp: %s
 action: %s
 error: %S\n"
-						(caar tail) (cdar tail) err))
+						(caar tail) (cdar tail) err)
+                                        :error)
 				       nil))))
 			  (setq tail (cdr tail)))
 			answer))))))

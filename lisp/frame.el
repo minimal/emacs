@@ -1,6 +1,6 @@
 ;;; frame.el --- multi-frame management independent of window systems  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1993-1994, 1996-1997, 2000-2015 Free Software
+;; Copyright (C) 1993-1994, 1996-1997, 2000-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -68,7 +68,7 @@ handles the corresponding kind of display.")
 You can set this in your init file; for example,
 
  (setq initial-frame-alist
-       '((top . 1) (left . 1) (width . 80) (height . 55)))
+       \\='((top . 1) (left . 1) (width . 80) (height . 55)))
 
 Parameters specified here supersede the values given in
 `default-frame-alist'.
@@ -103,7 +103,7 @@ initial minibuffer frame.
 You can set this in your init file; for example,
 
  (setq minibuffer-frame-alist
-       '((top . 1) (left . 1) (width . 80) (height . 2)))
+       \\='((top . 1) (left . 1) (width . 80) (height . 2)))
 
 It is not necessary to include (minibuffer . only); that is
 appended when the minibuffer frame is created."
@@ -911,7 +911,7 @@ if you want Emacs to examine the brightness for you.
 
 If you change this without using customize, you should use
 `frame-set-background-mode' to update existing frames;
-e.g. (mapc 'frame-set-background-mode (frame-list))."
+e.g. (mapc \\='frame-set-background-mode (frame-list))."
   :group 'faces
   :set #'(lambda (var value)
 	   (set-default var value)
@@ -2230,6 +2230,18 @@ See also `toggle-frame-maximized'."
 ;; Defined in dispnew.c.
 (make-obsolete-variable
  'window-system-version "it does not give useful information." "24.3")
+
+;; Variables which should trigger redisplay of the current buffer.
+(setq redisplay--variables (make-hash-table :test 'eq :size 10))
+(mapc (lambda (var)
+        (puthash var 1 redisplay--variables))
+      '(line-spacing
+        overline-margin
+        line-prefix
+        wrap-prefix
+        truncate-lines
+        bidi-paragraph-direction
+        bidi-display-reordering))
 
 (provide 'frame)
 

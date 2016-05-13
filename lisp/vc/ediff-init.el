@@ -1,6 +1,6 @@
 ;;; ediff-init.el --- Macros, variables, and defsubsts used by Ediff
 
-;; Copyright (C) 1994-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1994-2016 Free Software Foundation, Inc.
 
 ;; Author: Michael Kifer <kifer@cs.stonybrook.edu>
 ;; Package: ediff
@@ -718,9 +718,9 @@ appropriate symbol: `rcs', `pcl-cvs', or `generic-sc' if you so desire."
 (defcustom ediff-coding-system-for-read 'raw-text
   "The coding system for read to use when running the diff program as a subprocess.
 In most cases, the default will do.  However, under certain circumstances in
-MS-Windows you might need to use something like 'raw-text-dos here.
+MS-Windows you might need to use something like `raw-text-dos' here.
 So, if the output that your diff program sends to Emacs contains extra ^M's,
-you might need to experiment here, if the default or 'raw-text-dos doesn't
+you might need to experiment here, if the default or `raw-text-dos' doesn't
 work."
   :type 'symbol
   :group 'ediff)
@@ -750,7 +750,7 @@ to temp files in buffer jobs and when Ediff needs to find fine differences."
 (defun ediff-check-version (op major minor &optional type-of-emacs)
   "Check the current version against MAJOR and MINOR version numbers.
 The comparison uses operator OP, which may be any of: =, >, >=, <, <=.
-TYPE-OF-EMACS is either 'xemacs or 'emacs."
+TYPE-OF-EMACS is either `emacs' or `xemacs'."
   (declare (obsolete version< "23.1"))
   (and (cond ((eq type-of-emacs 'xemacs) (featurep 'xemacs))
 	     ((eq type-of-emacs 'emacs) (featurep 'emacs))

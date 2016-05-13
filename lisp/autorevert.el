@@ -1,8 +1,8 @@
 ;;; autorevert.el --- revert buffers when files on disk change  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1997-1999, 2001-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1997-1999, 2001-2016 Free Software Foundation, Inc.
 
-;; Author: Anders Lindgren <andersl@andersl.com>
+;; Author: Anders Lindgren
 ;; Keywords: convenience
 ;; Created: 1997-06-01
 ;; Date: 1999-11-30
@@ -458,7 +458,11 @@ specifies in the mode line."
   :global t :group 'auto-revert :lighter global-auto-revert-mode-text
   (auto-revert-set-timer)
   (if global-auto-revert-mode
-      (auto-revert-buffers)
+      (progn
+        ;; Disable file notification because it could use too many resources.
+        ;; See Bug#22814.
+        (setq auto-revert-use-notify nil)
+        (auto-revert-buffers))
     (dolist (buf (buffer-list))
       (with-current-buffer buf
 	(when auto-revert-use-notify
@@ -664,8 +668,8 @@ This is an internal function used by Auto-Revert Mode."
                  (not (eq revert 'fast)))
         (message "Reverting buffer `%s'." (buffer-name)))
       ;; If point (or a window point) is at the end of the buffer, we
-      ;; want to keep it at the end after reverting.  This allows to
-      ;; tail a file.
+      ;; want to keep it at the end after reverting.  This allows one
+      ;; to tail a file.
       (when buffer-file-name
         (setq eob (eobp))
         (walk-windows
@@ -680,7 +684,10 @@ This is an internal function used by Auto-Revert Mode."
         ;; not to forget that.  This gives undesirable results when
         ;; the file's mode changes, but that is less common.
         (let ((buffer-read-only buffer-read-only))
-          (revert-buffer 'ignore-auto 'dont-ask 'preserve-modes)))
+          ;; Bug#23276: When the file has been deleted, keep the
+          ;; buffer unchanged.
+          (ignore-errors
+            (revert-buffer 'ignore-auto 'dont-ask 'preserve-modes))))
       (when buffer-file-name
         (when eob (goto-char (point-max)))
         (dolist (window eoblist)

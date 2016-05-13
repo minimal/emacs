@@ -1,13 +1,13 @@
 /* GNU Emacs routines to deal with syntax tables; also word and list parsing.
-   Copyright (C) 1985, 1987, 1993-1995, 1997-1999, 2001-2015 Free
+   Copyright (C) 1985, 1987, 1993-1995, 1997-1999, 2001-2016 Free
    Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -519,8 +519,7 @@ update_syntax_table_forward (ptrdiff_t charpos, bool init,
   else
     {
       update_syntax_table (charpos, 1, init, object);
-      if (gl_state.e_property > syntax_propertize__done
-	  && NILP (object))
+      if (NILP (object) && gl_state.e_property > syntax_propertize__done)
 	parse_sexp_propertize (charpos);
     }
 }
@@ -791,8 +790,10 @@ back_comment (ptrdiff_t from, ptrdiff_t from_byte, ptrdiff_t stop,
 		   || SYNTAX_FLAGS_COMMENT_NESTED (syntax) != comnested))
 	continue;
 
-      /* Ignore escaped characters, except comment-enders.  */
-      if (code != Sendcomment && char_quoted (from, from_byte))
+      /* Ignore escaped characters, except comment-enders which cannot
+         be escaped.  */
+      if ((Vcomment_end_can_be_escaped || code != Sendcomment)
+          && char_quoted (from, from_byte))
 	continue;
 
       switch (code)
@@ -1535,9 +1536,15 @@ DEFUN ("forward-word", Fforward_word, Sforward_word, 0, 1, "^p",
        doc: /* Move point forward ARG words (backward if ARG is negative).
 If ARG is omitted or nil, move point forward one word.
 Normally returns t.
-If an edge of the buffer or a field boundary is reached, point is left there
-and the function returns nil.  Field boundaries are not noticed if
-`inhibit-field-text-motion' is non-nil.  */)
+If an edge of the buffer or a field boundary is reached, point is
+left there and the function returns nil.  Field boundaries are not
+noticed if `inhibit-field-text-motion' is non-nil.
+
+The word boundaries are normally determined by the buffer's syntax
+table, but `find-word-boundary-function-table', such as set up
+by `subword-mode', can change that.  If a Lisp program needs to
+move by words determined strictly by the syntax table, it should
+use `forward-word-strictly' instead.  */)
   (Lisp_Object arg)
 {
   Lisp_Object tmp;
@@ -2347,7 +2354,8 @@ forw_comment (ptrdiff_t from, ptrdiff_t from_byte, ptrdiff_t stop,
       if (code == Sendcomment
 	  && SYNTAX_FLAGS_COMMENT_STYLE (syntax, 0) == style
 	  && (SYNTAX_FLAGS_COMMENT_NESTED (syntax) ?
-	      (nesting > 0 && --nesting == 0) : nesting < 0))
+	      (nesting > 0 && --nesting == 0) : nesting < 0)
+          && !(Vcomment_end_can_be_escaped && char_quoted (from, from_byte)))
 	/* We have encountered a comment end of the same style
 	   as the comment sequence which began this comment
 	   section.  */
@@ -3693,15 +3701,21 @@ Each function is called with two arguments; POS and LIMIT.
 POS and LIMIT are character positions in the current buffer.
 
 If POS is less than LIMIT, POS is at the first character of a word,
-and the return value of a function is a position after the last
-character of that word.
+and the return value of a function should be a position after the
+last character of that word.
 
 If POS is not less than LIMIT, POS is at the last character of a word,
-and the return value of a function is a position at the first
+and the return value of a function should be a position at the first
 character of that word.
 
 In both cases, LIMIT bounds the search. */);
   Vfind_word_boundary_function_table = Fmake_char_table (Qnil, Qnil);
+
+  DEFVAR_BOOL ("comment-end-can-be-escaped", Vcomment_end_can_be_escaped,
+               doc: /* Non-nil means an escaped ender inside a comment doesn'tend the comment.  */);
+  Vcomment_end_can_be_escaped = 0;
+  DEFSYM (Qcomment_end_can_be_escaped, "comment-end-can-be-escaped");
+  Fmake_variable_buffer_local (Qcomment_end_can_be_escaped);
 
   defsubr (&Ssyntax_table_p);
   defsubr (&Ssyntax_table);

@@ -1,6 +1,6 @@
 ;;; smerge-mode.el --- Minor mode to resolve diff3 conflicts -*- lexical-binding: t -*-
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2016 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: vc, tools, revision control, merge, diff3, cvs, conflict
@@ -735,17 +735,17 @@ major modes.  Uses `smerge-resolve-function' to do the actual work."
 	  (smerge-auto-leave))))))
 
 (defun smerge-diff-base-mine ()
-  "Diff 'base' and 'mine' version in current conflict region."
+  "Diff `base' and `mine' version in current conflict region."
   (interactive)
   (smerge-diff 2 1))
 
 (defun smerge-diff-base-other ()
-  "Diff 'base' and 'other' version in current conflict region."
+  "Diff `base' and `other' version in current conflict region."
   (interactive)
   (smerge-diff 2 3))
 
 (defun smerge-diff-mine-other ()
-  "Diff 'mine' and 'other' version in current conflict region."
+  "Diff `mine' and `other' version in current conflict region."
   (interactive)
   (smerge-diff 1 3))
 

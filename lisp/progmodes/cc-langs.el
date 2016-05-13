@@ -1,6 +1,6 @@
 ;;; cc-langs.el --- language specific settings for CC Mode -*- coding: utf-8 -*-
 
-;; Copyright (C) 1985, 1987, 1992-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2016 Free Software Foundation, Inc.
 
 ;; Authors:    2002- Alan Mackenzie
 ;;             1998- Martin Stjernholm
@@ -228,6 +228,12 @@ the evaluated constant value at compile time."
     ;; with the group symbol for each group and should return non-nil
     ;; if that group is to be included.
     ;;
+    ;; OP-FILTER selects the operators.  It is either t to select all
+    ;; operators, a string to select all operators for which `string-match'
+    ;; matches the operator with the string, or a function which will be
+    ;; called with the operator and should return non-nil when the operator
+    ;; is to be selected.
+    ;;
     ;; If XLATE is given, it's a function which is called for each
     ;; matching operator and its return value is collected instead.
     ;; If it returns a list, the elements are spliced directly into
@@ -403,7 +409,9 @@ The syntax tables aren't stored directly since they're quite large."
 	   table)))
 (c-lang-defvar c++-template-syntax-table
   (and (c-lang-const c++-make-template-syntax-table)
-       (funcall (c-lang-const c++-make-template-syntax-table))))
+       ;; The next eval remove a superfluous ' from '(lambda.  This
+       ;; gets rid of compilation warnings.
+       (funcall (eval (c-lang-const c++-make-template-syntax-table)))))
 
 (c-lang-defconst c-make-no-parens-syntax-table
   ;; A variant of the standard syntax table which is used to find matching
@@ -426,7 +434,8 @@ The syntax tables aren't stored directly since they're quite large."
 	  table))))
 (c-lang-defvar c-no-parens-syntax-table
   (and (c-lang-const c-make-no-parens-syntax-table)
-       (funcall (c-lang-const c-make-no-parens-syntax-table))))
+       ;; See comment in `c++template-syntax-table' about the next `eval'.
+       (funcall (eval (c-lang-const c-make-no-parens-syntax-table)))))
 
 (c-lang-defconst c-identifier-syntax-modifications
   "A list that describes the modifications that should be done to the
@@ -496,8 +505,13 @@ parameters \(point-min) and \(point-max).")
   ;; For documentation see the following c-lang-defvar of the same name.
   ;; The value here may be a list of functions or a single function.
   t 'c-change-expand-fl-region
-  (c c++ objc) '(c-neutralize-syntax-in-and-mark-CPP
-		 c-change-expand-fl-region)
+  (c objc) '(c-neutralize-syntax-in-and-mark-CPP
+	     c-change-expand-fl-region)
+  c++ '(c-neutralize-syntax-in-and-mark-CPP
+	c-restore-<>-properties
+	c-change-expand-fl-region)
+  java '(c-restore-<>-properties
+	 c-change-expand-fl-region)
   awk 'c-awk-extend-and-syntax-tablify-region)
 (c-lang-defvar c-before-font-lock-functions
 	       (let ((fs (c-lang-const c-before-font-lock-functions)))
@@ -523,8 +537,8 @@ When the mode is initialized, these functions are called with
 parameters \(point-min), \(point-max) and <buffer size>.")
 
 (c-lang-defconst c-before-context-fontification-functions
-  awk nil
-  t 'c-context-expand-fl-region)
+  t 'c-context-expand-fl-region
+  awk nil)
   ;; For documentation see the following c-lang-defvar of the same name.
   ;; The value here may be a list of functions or a single function.
 (c-lang-defvar c-before-context-fontification-functions
@@ -1211,6 +1225,14 @@ operators."
 (c-lang-defvar c-assignment-op-regexp
   (c-lang-const c-assignment-op-regexp))
 
+(c-lang-defconst c-:$-multichar-token-regexp
+  ;; Regexp matching all tokens ending in ":" which are longer than one char.
+  ;; Currently (2016-01-07) only used in C++ Mode.
+  t (c-make-keywords-re nil
+      (c-filter-ops (c-lang-const c-operators) t ".+:$")))
+(c-lang-defvar c-:$-multichar-token-regexp
+  (c-lang-const c-:$-multichar-token-regexp))
+
 (c-lang-defconst c-<>-multichar-token-regexp
   ;; Regexp matching all tokens containing "<" or ">" which are longer
   ;; than one char.
@@ -1229,7 +1251,6 @@ operators."
 		    t
 		    "\\`<."
 		    (lambda (op) (substring op 1)))))
-
 (c-lang-defvar c-<-op-cont-regexp (c-lang-const c-<-op-cont-regexp))
 
 (c-lang-defconst c->-op-cont-tokens
@@ -1248,7 +1269,6 @@ operators."
   ;; Regexp matching the second and subsequent characters of all
   ;; multicharacter tokens that begin with ">".
   t (c-make-keywords-re nil (c-lang-const c->-op-cont-tokens)))
-
 (c-lang-defvar c->-op-cont-regexp (c-lang-const c->-op-cont-regexp))
 
 (c-lang-defconst c->-op-without->-cont-regexp
@@ -1263,9 +1283,18 @@ operators."
 		     "\\`>>"
 		     (lambda (op) (substring op 1)))
        :test 'string-equal)))
-
 (c-lang-defvar c->-op-without->-cont-regexp
   (c-lang-const c->-op-without->-cont-regexp))
+
+(c-lang-defconst c-multichar->-op-not->>-regexp
+  ;; Regexp matching multichar tokens containing ">", except ">>"
+  t (c-make-keywords-re nil
+      (delete ">>"
+	      (c-filter-ops (c-lang-const c-all-op-syntax-tokens)
+			    t
+			    "\\(.>\\|>.\\)"))))
+(c-lang-defvar c-multichar->-op-not->>-regexp
+  (c-lang-const c-multichar->-op-not->>-regexp))
 
 (c-lang-defconst c-stmt-delim-chars
   ;; The characters that should be considered to bound statements.  To
@@ -1429,6 +1458,14 @@ properly."
 	     "\\|")
 	    "\\)\\s *"))
 (c-lang-setvar comment-start-skip (c-lang-const comment-start-skip))
+
+(c-lang-defconst comment-end-can-be-escaped
+  "When non-nil, escaped EOLs inside comments are valid.
+This works in Emacs >= 25.1."
+  t nil
+  (c c++ objc) t)
+(c-lang-setvar comment-end-can-be-escaped
+	       (c-lang-const comment-end-can-be-escaped))
 
 (c-lang-defconst c-syntactic-ws-start
   ;; Regexp matching any sequence that can start syntactic whitespace.
@@ -1956,8 +1993,8 @@ will be handled."
 	 ;; In CORBA CIDL:
 	 "bindsTo" "delegatesTo" "implements" "proxy" "storedOn")
   ;; Note: "const" is not used in Java, but it's still a reserved keyword.
-  java '("abstract" "const" "final" "native" "private" "protected" "public"
-	 "static" "strictfp" "synchronized" "transient" "volatile")
+  java '("abstract" "const" "default" "final" "native" "private" "protected"
+	 "public" "static" "strictfp" "synchronized" "transient" "volatile")
   pike '("final" "inline" "local" "nomask" "optional" "private" "protected"
 	 "public" "static" "variant"))
 
@@ -3063,6 +3100,20 @@ expression is considered to be a type."
 		    ; generics is not yet coded in CC Mode.
 (c-lang-defvar c-recognize-<>-arglists (c-lang-const c-recognize-<>-arglists))
 
+(c-lang-defconst c-<>-notable-chars-re
+  "A regexp matching any single character notable inside a <...> construct.
+This must include \"<\" and \">\", and should include \",\", and
+any character which cannot be valid inside such a construct.
+This is used in `c-forward-<>-arglist-recur' to try to detect
+sequences of tokens which cannot be a template/generic construct.
+When \"(\" is present, that defun will attempt to parse a
+parenthesized expression inside the template.  When \")\" is
+present it will treat an unbalanced closing paren as a sign of
+the invalidity of the putative template construct."
+  t "[<;{},|+&->)]"
+  c++ "[<;{},>()]")
+(c-lang-defvar c-<>-notable-chars-re (c-lang-const c-<>-notable-chars-re))
+
 (c-lang-defconst c-enums-contain-decls
   "Non-nil means that an enum structure can contain declarations."
   t nil
@@ -3234,6 +3285,19 @@ way."
   ;; Objective-C.
   objc t)
 (c-lang-defvar c-type-decl-end-used (c-lang-const c-type-decl-end-used))
+
+(c-lang-defconst c-maybe-decl-faces
+  "List of faces that might be put at the start of a type when
+`c-font-lock-declarations' runs.  This must be evaluated (with `eval') at
+runtime to get the actual list of faces.  This ensures that face name
+aliases in Emacs are resolved."
+  t '(list nil
+	   font-lock-type-face
+	   c-reference-face-name
+	   font-lock-keyword-face)
+  java (append (c-lang-const c-maybe-decl-faces)
+	       '(font-lock-preprocessor-face)))
+(c-lang-defvar c-maybe-decl-faces (c-lang-const c-maybe-decl-faces))
 
 
 ;;; Wrap up the `c-lang-defvar' system.

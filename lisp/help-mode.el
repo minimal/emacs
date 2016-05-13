@@ -1,6 +1,6 @@
 ;;; help-mode.el --- `help-mode' used by *Help* buffers
 
-;; Copyright (C) 1985-1986, 1993-1994, 1998-2015 Free Software
+;; Copyright (C) 1985-1986, 1993-1994, 1998-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -107,7 +107,7 @@ The format is (FUNCTION ARGS...).")
 
 (defun help-button-action (button)
   "Call BUTTON's help function."
-  (help-do-xref (button-start button)
+  (help-do-xref nil
 		(button-get button 'help-function)
 		(button-get button 'help-args)))
 

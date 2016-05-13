@@ -1,6 +1,6 @@
 @c -*-texinfo-*-
 @c This is part of the GNU Emacs Lisp Reference Manual.
-@c Copyright (C) 1990-1995, 1998-2015 Free Software Foundation, Inc.
+@c Copyright (C) 1990-1995, 1998-2016 Free Software Foundation, Inc.
 @c See the file elisp.texi for copying conditions.
 @node Variables
 @chapter Variables
@@ -2055,7 +2055,7 @@ cdar      nthcdr
 A call to any of the following Emacs-specific functions:
 
 @smallexample
-default-value                 process-get
+alist-get                     process-get
 frame-parameter               process-sentinel
 terminal-parameter            window-buffer
 keymap-parent                 window-display-table
@@ -2064,7 +2064,7 @@ overlay-get                   window-hscroll
 overlay-start                 window-parameter
 overlay-end                   window-point
 process-buffer                window-start
-process-filter
+process-filter                default-value
 @end smallexample
 @end itemize
 

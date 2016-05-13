@@ -1,13 +1,13 @@
 /* Functions for the X window system.
 
-Copyright (C) 1989, 1992-2015 Free Software Foundation, Inc.
+Copyright (C) 1989, 1992-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -181,23 +181,38 @@ x_real_pos_and_offsets (struct frame *f,
                         int *yptr,
                         int *outer_border)
 {
-  int win_x, win_y, outer_x IF_LINT (= 0), outer_y IF_LINT (= 0);
+  int win_x = 0, win_y = 0, outer_x = 0, outer_y = 0;
   int real_x = 0, real_y = 0;
   bool had_errors = false;
   Window win = f->output_data.x->parent_desc;
+  struct x_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
+  long max_len = 400;
+  Atom target_type = XA_CARDINAL;
+  unsigned int ow = 0, oh = 0;
+  unsigned int fw = 0, fh = 0;
+  unsigned int bw = 0;
+  /* We resort to XCB if possible because there are several X calls
+     here which require responses from the server but do not have data
+     dependencies between them.  Using XCB lets us pipeline requests,
+     whereas with Xlib we must wait for each answer before sending the
+     next request.
+
+     For a non-local display, the round-trip time could be a few tens
+     of milliseconds, depending on the network distance.  It doesn't
+     take a lot of those to add up to a noticeable hesitation in
+     responding to user actions.  */
+#ifdef USE_XCB
+  xcb_connection_t *xcb_conn = dpyinfo->xcb_connection;
+  xcb_get_property_cookie_t prop_cookie;
+  xcb_get_geometry_cookie_t outer_geom_cookie;
+  bool sent_requests = false;
+#else
   Atom actual_type;
   unsigned long actual_size, bytes_remaining;
   int rc, actual_format;
-  struct x_display_info *dpyinfo = FRAME_DISPLAY_INFO (f);
-  long max_len = 400;
   Display *dpy = FRAME_X_DISPLAY (f);
   unsigned char *tmp_data = NULL;
-  Atom target_type = XA_CARDINAL;
-  unsigned int ow IF_LINT (= 0), oh IF_LINT (= 0);
-
-  block_input ();
-
-  x_catch_errors (dpy);
+#endif
 
   if (x_pixels_diff) *x_pixels_diff = 0;
   if (y_pixels_diff) *y_pixels_diff = 0;
@@ -212,6 +227,13 @@ x_real_pos_and_offsets (struct frame *f,
   if (win == dpyinfo->root_window)
     win = FRAME_OUTER_WINDOW (f);
 
+  block_input ();
+
+#ifndef USE_XCB
+  /* If we're using XCB, all errors are checked for on each call.  */
+  x_catch_errors (dpy);
+#endif
+
   /* This loop traverses up the containment tree until we hit the root
      window.  Window managers may intersect many windows between our window
      and the root window.  The window we find just before the root window
@@ -219,22 +241,39 @@ x_real_pos_and_offsets (struct frame *f,
   for (;;)
     {
       Window wm_window, rootw;
+
+#ifdef USE_XCB
+      xcb_query_tree_cookie_t query_tree_cookie;
+      xcb_query_tree_reply_t *query_tree;
+
+      query_tree_cookie = xcb_query_tree (xcb_conn, win);
+      query_tree = xcb_query_tree_reply (xcb_conn, query_tree_cookie, NULL);
+      if (query_tree == NULL)
+	had_errors = true;
+      else
+	{
+	  wm_window = query_tree->parent;
+	  rootw = query_tree->root;
+	  free (query_tree);
+	}
+#else
       Window *tmp_children;
       unsigned int tmp_nchildren;
       int success;
 
-      success = XQueryTree (FRAME_X_DISPLAY (f), win, &rootw,
+      success = XQueryTree (dpy, win, &rootw,
 			    &wm_window, &tmp_children, &tmp_nchildren);
 
-      had_errors = x_had_errors_p (FRAME_X_DISPLAY (f));
+      had_errors = x_had_errors_p (dpy);
 
       /* Don't free tmp_children if XQueryTree failed.  */
       if (! success)
 	break;
 
       XFree (tmp_children);
+#endif
 
-      if (wm_window == rootw || had_errors)
+      if (had_errors || wm_window == rootw)
         break;
 
       win = wm_window;
@@ -242,15 +281,74 @@ x_real_pos_and_offsets (struct frame *f,
 
   if (! had_errors)
     {
-      unsigned int bw, ign;
+#ifdef USE_XCB
+      xcb_get_geometry_cookie_t geom_cookie;
+      xcb_translate_coordinates_cookie_t trans_cookie;
+      xcb_translate_coordinates_cookie_t outer_trans_cookie;
+
+      xcb_translate_coordinates_reply_t *trans;
+      xcb_get_geometry_reply_t *geom;
+#else
       Window child, rootw;
+      unsigned int ign;
+#endif
+
+#ifdef USE_XCB
+      /* Fire off the requests that don't have data dependencies.
+
+         Once we've done this, we must collect the results for each
+         one before returning, even if other errors are detected,
+         making the other responses moot.  */
+      geom_cookie = xcb_get_geometry (xcb_conn, win);
+
+      trans_cookie =
+        xcb_translate_coordinates (xcb_conn,
+                                   /* From-window, to-window.  */
+                                   FRAME_DISPLAY_INFO (f)->root_window,
+                                   FRAME_X_WINDOW (f),
+
+                                   /* From-position.  */
+                                   0, 0);
+      if (FRAME_X_WINDOW (f) != FRAME_OUTER_WINDOW (f))
+        outer_trans_cookie =
+          xcb_translate_coordinates (xcb_conn,
+                                     /* From-window, to-window.  */
+                                     FRAME_DISPLAY_INFO (f)->root_window,
+                                     FRAME_OUTER_WINDOW (f),
+
+                                     /* From-position.  */
+                                     0, 0);
+      if (right_offset_x || bottom_offset_y)
+	outer_geom_cookie = xcb_get_geometry (xcb_conn,
+					      FRAME_OUTER_WINDOW (f));
+
+      if (dpyinfo->root_window == f->output_data.x->parent_desc)
+	/* Try _NET_FRAME_EXTENTS if our parent is the root window.  */
+	prop_cookie = xcb_get_property (xcb_conn, 0, win,
+					dpyinfo->Xatom_net_frame_extents,
+					target_type, 0, max_len);
+
+      sent_requests = true;
+#endif
 
       /* Get the real coordinates for the WM window upper left corner */
-      XGetGeometry (FRAME_X_DISPLAY (f), win,
-                    &rootw, &real_x, &real_y, &ow, &oh, &bw, &ign);
-
-      if (outer_border)
-        *outer_border = bw;
+#ifdef USE_XCB
+      geom = xcb_get_geometry_reply (xcb_conn, geom_cookie, NULL);
+      if (geom)
+	{
+	  real_x = geom->x;
+	  real_y = geom->y;
+	  ow = geom->width;
+	  oh = geom->height;
+	  bw = geom->border_width;
+	  free (geom);
+	}
+      else
+	had_errors = true;
+#else
+      XGetGeometry (dpy, win,
+		    &rootw, &real_x, &real_y, &ow, &oh, &bw, &ign);
+#endif
 
       /* Translate real coordinates to coordinates relative to our
          window.  For our window, the upper left corner is 0, 0.
@@ -261,18 +359,38 @@ x_real_pos_and_offsets (struct frame *f,
          |      title                |
          | -----------------         v y
          | |  our window
-      */
-      XTranslateCoordinates (FRAME_X_DISPLAY (f),
+
+         Since we don't care about the child window corresponding to
+         the actual coordinates, we can send zero to get the offsets
+         and compute the resulting coordinates below.  This reduces
+         the data dependencies between calls and lets us pipeline the
+         requests better in the XCB case.  */
+#ifdef USE_XCB
+      trans = xcb_translate_coordinates_reply (xcb_conn, trans_cookie, NULL);
+      if (trans)
+	{
+	  win_x = trans->dst_x;
+	  win_y = trans->dst_y;
+	  free (trans);
+	}
+      else
+	had_errors = true;
+#else
+      XTranslateCoordinates (dpy,
 
 			     /* From-window, to-window.  */
 			     FRAME_DISPLAY_INFO (f)->root_window,
                              FRAME_X_WINDOW (f),
 
 			     /* From-position, to-position.  */
-                             real_x, real_y, &win_x, &win_y,
+                             0, 0, &win_x, &win_y,
 
 			     /* Child of win.  */
 			     &child);
+#endif
+
+      win_x += real_x;
+      win_y += real_y;
 
       if (FRAME_X_WINDOW (f) == FRAME_OUTER_WINDOW (f))
 	{
@@ -281,25 +399,73 @@ x_real_pos_and_offsets (struct frame *f,
 	}
       else
         {
-          XTranslateCoordinates (FRAME_X_DISPLAY (f),
+#ifdef USE_XCB
+          xcb_translate_coordinates_reply_t *outer_trans;
+
+          outer_trans = xcb_translate_coordinates_reply (xcb_conn,
+                                                         outer_trans_cookie,
+                                                         NULL);
+          if (outer_trans)
+            {
+              outer_x = outer_trans->dst_x;
+              outer_y = outer_trans->dst_y;
+              free (outer_trans);
+            }
+          else
+	    had_errors = true;
+#else
+          XTranslateCoordinates (dpy,
 
                                  /* From-window, to-window.  */
                                  FRAME_DISPLAY_INFO (f)->root_window,
                                  FRAME_OUTER_WINDOW (f),
 
                                  /* From-position, to-position.  */
-                                 real_x, real_y, &outer_x, &outer_y,
+                                 0, 0, &outer_x, &outer_y,
 
                                  /* Child of win.  */
                                  &child);
+#endif
+
+	  outer_x += real_x;
+	  outer_y += real_y;
 	}
 
-      had_errors = x_had_errors_p (FRAME_X_DISPLAY (f));
+#ifndef USE_XCB
+      had_errors = x_had_errors_p (dpy);
+#endif
     }
 
-  if (!had_errors && dpyinfo->root_window == f->output_data.x->parent_desc)
+  if (dpyinfo->root_window == f->output_data.x->parent_desc)
     {
       /* Try _NET_FRAME_EXTENTS if our parent is the root window.  */
+#ifdef USE_XCB
+      /* Make sure we didn't get an X error early and skip sending the
+         request.  */
+      if (sent_requests)
+        {
+          xcb_get_property_reply_t *prop;
+
+          prop = xcb_get_property_reply (xcb_conn, prop_cookie, NULL);
+          if (prop)
+            {
+              if (prop->type == target_type
+                  && prop->format == 32
+                  && (xcb_get_property_value_length (prop)
+		      == 4 * sizeof (int32_t)))
+                {
+                  int32_t *fe = xcb_get_property_value (prop);
+
+                  outer_x = -fe[0];
+                  outer_y = -fe[2];
+                  real_x -= fe[0];
+                  real_y -= fe[2];
+                }
+              free (prop);
+            }
+          /* Xlib version doesn't set had_errors here.  Intentional or bug?  */
+        }
+#else
       rc = XGetWindowProperty (dpy, win, dpyinfo->Xatom_net_frame_extents,
                                0, max_len, False, target_type,
                                &actual_type, &actual_format, &actual_size,
@@ -317,9 +483,42 @@ x_real_pos_and_offsets (struct frame *f,
         }
 
       if (tmp_data) XFree (tmp_data);
+#endif
     }
 
+  if (right_offset_x || bottom_offset_y)
+    {
+#ifdef USE_XCB
+      /* Make sure we didn't get an X error early and skip sending the
+         request.  */
+      if (sent_requests)
+        {
+          xcb_get_geometry_reply_t *outer_geom;
+
+          outer_geom = xcb_get_geometry_reply (xcb_conn, outer_geom_cookie,
+                                               NULL);
+          if (outer_geom)
+            {
+              fw = outer_geom->width;
+              fh = outer_geom->height;
+              free (outer_geom);
+            }
+          else
+	    had_errors = true;
+        }
+#else
+      int xy_ign;
+      unsigned int ign;
+      Window rootw;
+
+      XGetGeometry (dpy, FRAME_OUTER_WINDOW (f),
+		    &rootw, &xy_ign, &xy_ign, &fw, &fh, &ign, &ign);
+#endif
+    }
+
+#ifndef USE_XCB
   x_uncatch_errors ();
+#endif
 
   unblock_input ();
 
@@ -334,17 +533,10 @@ x_real_pos_and_offsets (struct frame *f,
   if (xptr) *xptr = real_x;
   if (yptr) *yptr = real_y;
 
-  if (right_offset_x || bottom_offset_y)
-    {
-      int xy_ign;
-      unsigned int ign, fw, fh;
-      Window rootw;
+  if (outer_border) *outer_border = bw;
 
-      XGetGeometry (FRAME_X_DISPLAY (f), FRAME_OUTER_WINDOW (f),
-		    &rootw, &xy_ign, &xy_ign, &fw, &fh, &ign, &ign);
-      if (right_offset_x) *right_offset_x = ow - fw + outer_x;
-      if (bottom_offset_y) *bottom_offset_y = oh - fh + outer_y;
-    }
+  if (right_offset_x) *right_offset_x = ow - fw + outer_x;
+  if (bottom_offset_y) *bottom_offset_y = oh - fh + outer_y;
 }
 
 /* Store the screen positions of frame F into XPTR and YPTR.
@@ -3478,7 +3670,7 @@ x_focus_frame (struct frame *f)
 
 DEFUN ("xw-color-defined-p", Fxw_color_defined_p, Sxw_color_defined_p, 1, 2, 0,
        doc: /* Internal function called by `color-defined-p', which see.
-(Note that the Nextstep version of this function ignores FRAME.)  */)
+\(Note that the Nextstep version of this function ignores FRAME.)  */)
   (Lisp_Object color, Lisp_Object frame)
 {
   XColor foo;
@@ -3645,7 +3837,7 @@ If omitted or nil, that stands for the selected frame's display.  */)
 DEFUN ("x-server-vendor", Fx_server_vendor, Sx_server_vendor, 0, 1, 0,
        doc: /* Return the "vendor ID" string of the GUI software on TERMINAL.
 
-(Labeling every distributor as a "vendor" embodies the false assumption
+\(Labeling every distributor as a "vendor" embodies the false assumption
 that operating systems cannot be developed and distributed noncommercially.)
 The optional argument TERMINAL specifies which display to ask about.
 
@@ -4070,8 +4262,19 @@ x_get_monitor_attributes_xrandr (struct x_display_info *dpyinfo)
   RROutput pxid = None;
   struct MonitorInfo *monitors;
 
-#ifdef HAVE_XRRGETSCREENRESOURCESCURRENT
-  resources = XRRGetScreenResourcesCurrent (dpy, dpyinfo->root_window);
+#define RANDR13_LIBRARY \
+  (RANDR_MAJOR > 1 || (RANDR_MAJOR == 1 && RANDR_MINOR >= 3))
+
+#if RANDR13_LIBRARY
+  /* Check if the display supports 1.3 too.  */
+  bool randr13_avail = (dpyinfo->xrandr_major_version > 1
+			|| (dpyinfo->xrandr_major_version == 1
+			    && dpyinfo->xrandr_minor_version >= 3));
+
+  if (randr13_avail)
+    resources = XRRGetScreenResourcesCurrent (dpy, dpyinfo->root_window);
+  else
+    resources = XRRGetScreenResources (dpy, dpyinfo->root_window);
 #else
   resources = XRRGetScreenResources (dpy, dpyinfo->root_window);
 #endif
@@ -4084,8 +4287,9 @@ x_get_monitor_attributes_xrandr (struct x_display_info *dpyinfo)
   n_monitors = resources->noutput;
   monitors = xzalloc (n_monitors * sizeof *monitors);
 
-#ifdef HAVE_XRRGETOUTPUTPRIMARY
-  pxid = XRRGetOutputPrimary (dpy, dpyinfo->root_window);
+#ifdef RANDR13_LIBRARY
+  if (randr13_avail)
+    pxid = XRRGetOutputPrimary (dpy, dpyinfo->root_window);
 #endif
 
   for (i = 0; i < n_monitors; ++i)
@@ -4168,9 +4372,11 @@ x_get_monitor_attributes (struct x_display_info *dpyinfo)
   xrr_ok = XRRQueryExtension (dpy, &xrr_event_base, &xrr_error_base);
   if (xrr_ok)
     {
-      int xrr_major, xrr_minor;
-      XRRQueryVersion (dpy, &xrr_major, &xrr_minor);
-      xrr_ok = (xrr_major == 1 && xrr_minor >= 2) || xrr_major > 1;
+      XRRQueryVersion (dpy, &dpyinfo->xrandr_major_version,
+		       &dpyinfo->xrandr_minor_version);
+      xrr_ok = ((dpyinfo->xrandr_major_version == 1
+		 && dpyinfo->xrandr_minor_version >= 2)
+		|| dpyinfo->xrandr_major_version > 1);
     }
 
   if (xrr_ok)
@@ -4567,7 +4773,7 @@ DEFUN ("x-set-mouse-absolute-pixel-position", Fx_set_mouse_absolute_pixel_positi
        Sx_set_mouse_absolute_pixel_position, 2, 2, 0,
        doc: /* Move mouse pointer to absolute pixel position (X, Y).
 The coordinates X and Y are interpreted in pixels relative to a position
-(0, 0) of the selected frame's display.  */)
+\(0, 0) of the selected frame's display.  */)
   (Lisp_Object x, Lisp_Object y)
   {
   struct frame *f = SELECTED_FRAME ();
@@ -4743,7 +4949,7 @@ DISPLAY is the name of the display to connect to.
 Optional second arg XRM-STRING is a string of resources in xrdb format.
 If the optional third arg MUST-SUCCEED is non-nil,
 terminate Emacs if we can't open the connection.
-(In the Nextstep version, the last two arguments are currently ignored.)  */)
+\(In the Nextstep version, the last two arguments are currently ignored.)  */)
   (Lisp_Object display, Lisp_Object xrm_string, Lisp_Object must_succeed)
 {
   char *xrm_option;
@@ -5390,6 +5596,8 @@ x_create_tip_frame (struct x_display_info *dpyinfo,
 		       "autoLower", "AutoRaiseLower", RES_TYPE_BOOLEAN);
   x_default_parameter (f, parms, Qcursor_type, Qbox,
 		       "cursorType", "CursorType", RES_TYPE_SYMBOL);
+  x_default_parameter (f, parms, Qalpha, Qnil,
+		       "alpha", "Alpha", RES_TYPE_NUMBER);
 
   /* Dimensions, especially FRAME_LINES (f), must be done via change_frame_size.
      Change will not be effected unless different from the current
@@ -5489,6 +5697,7 @@ compute_tip_xy (struct frame *f, Lisp_Object parms, Lisp_Object dx, Lisp_Object 
   int win_x, win_y;
   Window root, child;
   unsigned pmask;
+  int min_x, min_y, max_x, max_y = -1;
 
   /* User-specified position?  */
   left = Fcdr (Fassq (Qleft, parms));
@@ -5501,45 +5710,81 @@ compute_tip_xy (struct frame *f, Lisp_Object parms, Lisp_Object dx, Lisp_Object 
   if ((!INTEGERP (left) && !INTEGERP (right))
       || (!INTEGERP (top) && !INTEGERP (bottom)))
     {
+      Lisp_Object frame, attributes, monitor, geometry;
+
       block_input ();
       XQueryPointer (FRAME_X_DISPLAY (f), FRAME_DISPLAY_INFO (f)->root_window,
 		     &root, &child, root_x, root_y, &win_x, &win_y, &pmask);
       unblock_input ();
+
+      XSETFRAME(frame, f);
+      attributes = Fx_display_monitor_attributes_list (frame);
+
+      /* Try to determine the monitor where the mouse pointer is and
+         its geometry.  See bug#22549.  */
+      while (CONSP (attributes))
+	{
+          monitor = XCAR (attributes);
+          geometry = Fassq (Qgeometry, monitor);
+          if (CONSP (geometry))
+            {
+              min_x = XINT (Fnth (make_number (1), geometry));
+              min_y = XINT (Fnth (make_number (2), geometry));
+              max_x = min_x + XINT (Fnth (make_number (3), geometry));
+              max_y = min_y + XINT (Fnth (make_number (4), geometry));
+              if (min_x <= *root_x && *root_x < max_x
+                  && min_y <= *root_y && *root_y < max_y)
+                {
+                  break;
+                }
+              max_y = -1;
+            }
+
+          attributes = XCDR (attributes);
+	}
+    }
+
+  /* It was not possible to determine the monitor's geometry, so we
+     assign some sane defaults here: */
+  if ( max_y < 0 )
+    {
+      min_x = 0;
+      min_y = 0;
+      max_x = x_display_pixel_width (FRAME_DISPLAY_INFO (f));
+      max_y = x_display_pixel_height (FRAME_DISPLAY_INFO (f));
     }
 
   if (INTEGERP (top))
     *root_y = XINT (top);
   else if (INTEGERP (bottom))
     *root_y = XINT (bottom) - height;
-  else if (*root_y + XINT (dy) <= 0)
-    *root_y = 0; /* Can happen for negative dy */
-  else if (*root_y + XINT (dy) + height
-	   <= x_display_pixel_height (FRAME_DISPLAY_INFO (f)))
+  else if (*root_y + XINT (dy) <= min_y)
+    *root_y = min_y; /* Can happen for negative dy */
+  else if (*root_y + XINT (dy) + height <= max_y)
     /* It fits below the pointer */
     *root_y += XINT (dy);
-  else if (height + XINT (dy) <= *root_y)
+  else if (height + XINT (dy) + min_y <= *root_y)
     /* It fits above the pointer.  */
     *root_y -= height + XINT (dy);
   else
     /* Put it on the top.  */
-    *root_y = 0;
+    *root_y = min_y;
 
   if (INTEGERP (left))
     *root_x = XINT (left);
   else if (INTEGERP (right))
-    *root_y = XINT (right) - width;
-  else if (*root_x + XINT (dx) <= 0)
+    *root_x = XINT (right) - width;
+  else if (*root_x + XINT (dx) <= min_x)
     *root_x = 0; /* Can happen for negative dx */
-  else if (*root_x + XINT (dx) + width
-	   <= x_display_pixel_width (FRAME_DISPLAY_INFO (f)))
+  else if (*root_x + XINT (dx) + width <= max_x)
     /* It fits to the right of the pointer.  */
     *root_x += XINT (dx);
-  else if (width + XINT (dx) <= *root_x)
+  else if (width + XINT (dx) + min_x <= *root_x)
     /* It fits to the left of the pointer.  */
     *root_x -= width + XINT (dx);
   else
-    /* Put it left-justified on the screen--it ought to fit that way.  */
-    *root_x = 0;
+    /* Put it left justified on the screen -- it ought to fit that way.  */
+    *root_x = min_x;
 }
 
 
@@ -5890,16 +6135,19 @@ Value is t if tooltip was open, nil otherwise.  */)
 	 items is unmapped.  Redisplay the menu manually...  */
       {
         Widget w;
-	struct frame *f = SELECTED_FRAME ();
-	w = f->output_data.x->menubar_widget;
+        struct frame *f = SELECTED_FRAME ();
+        if (FRAME_X_P (f) && FRAME_LIVE_P (f))
+          {
+          w = f->output_data.x->menubar_widget;
 
-	if (!DoesSaveUnders (FRAME_DISPLAY_INFO (f)->screen)
-	    && w != NULL)
-	  {
-	    block_input ();
-	    xlwmenu_redisplay (w);
-	    unblock_input ();
-	  }
+          if (!DoesSaveUnders (FRAME_DISPLAY_INFO (f)->screen)
+              && w != NULL)
+            {
+              block_input ();
+              xlwmenu_redisplay (w);
+              unblock_input ();
+            }
+        }
       }
 #endif /* USE_LUCID */
     }
@@ -6368,43 +6616,40 @@ present and mapped to the usual X keysyms.  */)
 
 #ifdef USE_CAIRO
 DEFUN ("x-export-frames", Fx_export_frames, Sx_export_frames, 0, 2, 0,
-       doc: /* XXX Experimental.  Return image data of FRAMES in TYPE format.
+       doc: /* Return image data of FRAMES in TYPE format.
 FRAMES should be nil (the selected frame), a frame, or a list of
-frames (each of which corresponds to one page).  Optional arg TYPE
-should be either `pdf' (default), `png', `ps', or `svg'.  Supported
-types are determined by the compile-time configuration of cairo.  */)
+frames (each of which corresponds to one page).  Each frame should be
+visible.  Optional arg TYPE should be either `pdf' (default), `png',
+`postscript', or `svg'.  Supported types are determined by the
+compile-time configuration of cairo.  */)
      (Lisp_Object frames, Lisp_Object type)
 {
-  Lisp_Object result, rest, tmp;
+  Lisp_Object rest, tmp;
   cairo_surface_type_t surface_type;
 
-  if (NILP (frames))
-    frames = selected_frame;
   if (!CONSP (frames))
     frames = list1 (frames);
 
   tmp = Qnil;
   for (rest = frames; CONSP (rest); rest = XCDR (rest))
     {
-      struct frame *f = XFRAME (XCAR (rest));
-
-      if (! FRAME_LIVE_P (f) || ! FRAME_X_P (f) || ! FRAME_LIVE_P (f))
-        error ("Invalid frame");
-
+      struct frame *f = decode_window_system_frame (XCAR (rest));
       Lisp_Object frame;
 
       XSETFRAME (frame, f);
+      if (!FRAME_VISIBLE_P (f))
+	error ("Frames to be exported must be visible.");
       tmp = Fcons (frame, tmp);
     }
   frames = Fnreverse (tmp);
 
 #ifdef CAIRO_HAS_PDF_SURFACE
-  if (NILP (type) || EQ (type, intern ("pdf"))) /* XXX: Qpdf */
+  if (NILP (type) || EQ (type, Qpdf))
     surface_type = CAIRO_SURFACE_TYPE_PDF;
   else
 #endif
 #ifdef CAIRO_HAS_PNG_FUNCTIONS
-  if (EQ (type, intern ("png")))
+  if (EQ (type, Qpng))
     {
       if (!NILP (XCDR (frames)))
 	error ("PNG export cannot handle multiple frames.");
@@ -6413,12 +6658,12 @@ types are determined by the compile-time configuration of cairo.  */)
   else
 #endif
 #ifdef CAIRO_HAS_PS_SURFACE
-  if (EQ (type, intern ("ps")))
+  if (EQ (type, Qpostscript))
     surface_type = CAIRO_SURFACE_TYPE_PS;
   else
 #endif
 #ifdef CAIRO_HAS_SVG_SURFACE
-  if (EQ (type, intern ("svg")))
+  if (EQ (type, Qsvg))
     {
       /* For now, we stick to SVG 1.1.  */
       if (!NILP (XCDR (frames)))
@@ -6429,9 +6674,7 @@ types are determined by the compile-time configuration of cairo.  */)
 #endif
     error ("Unsupported export type");
 
-  result = x_cr_export_frames (frames, surface_type);
-
-  return result;
+  return x_cr_export_frames (frames, surface_type);
 }
 
 #ifdef USE_GTK
@@ -6459,8 +6702,12 @@ The return value is an alist containing the following keys:
 	on, in points.
 
 The paper width can be obtained as the sum of width, left-margin, and
-right-margin values.  Likewise, the paper height is the sum of height,
-top-margin, and bottom-margin values.  */)
+right-margin values if the page orientation is `portrait' or
+`reverse-portrait'.  Otherwise, it is the sum of width, top-margin,
+and bottom-margin values.  Likewise, the paper height is the sum of
+height, top-margin, and bottom-margin values if the page orientation
+is `portrait' or `reverse-portrait'.  Otherwise, it is the sum of
+height, left-margin, and right-margin values.  */)
      (void)
 {
   Lisp_Object result;
@@ -6480,29 +6727,29 @@ visible.  */)
      (Lisp_Object frames)
 {
   Lisp_Object rest, tmp;
+  int count;
 
-  if (NILP (frames))
-    frames = selected_frame;
   if (!CONSP (frames))
     frames = list1 (frames);
 
   tmp = Qnil;
   for (rest = frames; CONSP (rest); rest = XCDR (rest))
     {
-      struct frame *f = XFRAME (XCAR (rest));
-      if (! FRAME_LIVE_P (f) || ! FRAME_X_P (f) || ! FRAME_LIVE_P (f))
-        error ("Invalid frame");
+      struct frame *f = decode_window_system_frame (XCAR (rest));
       Lisp_Object frame;
 
       XSETFRAME (frame, f);
-      if (!EQ (Fframe_visible_p (frame), Qt))
+      if (!FRAME_VISIBLE_P (f))
 	error ("Frames to be printed must be visible.");
       tmp = Fcons (frame, tmp);
     }
   frames = Fnreverse (tmp);
 
   /* Make sure the current matrices are up-to-date.  */
-  Fredisplay (Qt);
+  count = SPECPDL_INDEX ();
+  specbind (Qredisplay_dont_pause, Qt);
+  redisplay_preserve_echo_area (32);
+  unbind_to (count, Qnil);
 
   block_input ();
   xg_print_frames_dialog (frames);
@@ -6572,6 +6819,8 @@ syms_of_xfns (void)
   DEFSYM (Qmono, "mono");
 
 #ifdef USE_CAIRO
+  DEFSYM (Qpdf, "pdf");
+
   DEFSYM (Qorientation, "orientation");
   DEFSYM (Qtop_margin, "top-margin");
   DEFSYM (Qbottom_margin, "bottom-margin");

@@ -1,6 +1,6 @@
 ;;; mailclient.el --- mail sending via system's mail client.
 
-;; Copyright (C) 2005-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2005-2016 Free Software Foundation, Inc.
 
 ;; Author: David Reitter <david.reitter@gmail.com>
 ;; Keywords: mail
@@ -22,7 +22,7 @@
 
 ;;; Commentary:
 
-;; This package allows to hand over a buffer to be sent off
+;; This package allows handing over a buffer to be sent off
 ;; via the system's designated e-mail client.
 ;; Note that the e-mail client will display the contents of the buffer
 ;; again for editing.

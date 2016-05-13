@@ -1,6 +1,6 @@
 ;;; dired.el --- directory-browsing commands -*- lexical-binding: t -*-
 
-;; Copyright (C) 1985-1986, 1992-1997, 2000-2015 Free Software
+;; Copyright (C) 1985-1986, 1992-1997, 2000-2016 Free Software
 ;; Foundation, Inc.
 
 ;; Author: Sebastian Kremer <sk@thp.uni-koeln.de>
@@ -1450,7 +1450,7 @@ Do so according to the former subdir alist OLD-SUBDIR-ALIST."
     (define-key map "." 'dired-clean-directory)
     (define-key map "~" 'dired-flag-backup-files)
     ;; Upper case keys (except !) for operating on the marked files
-    (define-key map "A" 'dired-do-search)
+    (define-key map "A" 'dired-do-find-regexp)
     (define-key map "C" 'dired-do-copy)
     (define-key map "B" 'dired-do-byte-compile)
     (define-key map "D" 'dired-do-delete)
@@ -1460,7 +1460,7 @@ Do so according to the former subdir alist OLD-SUBDIR-ALIST."
     (define-key map "M" 'dired-do-chmod)
     (define-key map "O" 'dired-do-chown)
     (define-key map "P" 'dired-do-print)
-    (define-key map "Q" 'dired-do-query-replace-regexp)
+    (define-key map "Q" 'dired-do-find-regexp-and-replace)
     (define-key map "R" 'dired-do-rename)
     (define-key map "S" 'dired-do-symlink)
     (define-key map "T" 'dired-do-touch)
@@ -1542,7 +1542,8 @@ Do so according to the former subdir alist OLD-SUBDIR-ALIST."
     (define-key map "<" 'dired-prev-dirline)
     (define-key map ">" 'dired-next-dirline)
     (define-key map "^" 'dired-up-directory)
-    (define-key map " "  'dired-next-line)
+    (define-key map " " 'dired-next-line)
+    (define-key map [?\S-\ ] 'dired-previous-line)
     (define-key map [remap next-line] 'dired-next-line)
     (define-key map [remap previous-line] 'dired-previous-line)
     ;; hiding
@@ -2031,7 +2032,7 @@ Otherwise, toggle `read-only-mode'."
 (defun dired-next-line (arg)
   "Move down lines then position at filename.
 Optional prefix ARG says how many lines to move; default is one line."
-  (interactive "p")
+  (interactive "^p")
   (let ((line-move-visual)
 	(goal-column))
     (line-move arg t))
@@ -2044,7 +2045,7 @@ Optional prefix ARG says how many lines to move; default is one line."
 (defun dired-previous-line (arg)
   "Move up lines then position at filename.
 Optional prefix ARG says how many lines to move; default is one line."
-  (interactive "p")
+  (interactive "^p")
   (dired-next-line (- (or arg 1))))
 
 (defun dired-next-dirline (arg &optional opoint)
@@ -2735,9 +2736,18 @@ instead of `dired-actual-switches'."
 		 (save-excursion
 		   (goto-char (point-min))
 		   (dired-goto-file-1 file file (point-max)))
-		 ;; Otherwise, look for it as a relative name.  The
-		 ;; hair is to get the result of `dired-goto-subdir'
-		 ;; without calling it if we don't have any subdirs.
+                 ;; Next, look for it as a relative name with leading
+                 ;; subdirectories.  (This happens in Dired buffers
+                 ;; created by find-dired, for example.)
+                 (save-excursion
+                   (goto-char (point-min))
+                   (dired-goto-file-1 (file-relative-name file
+                                                          default-directory)
+                                      file (point-max)))
+		 ;; Otherwise, look for it as a relative name, a base
+		 ;; name only.  The hair is to get the result of
+		 ;; `dired-goto-subdir' without calling it if we don't
+		 ;; have any subdirs.
 		 (save-excursion
 		   (when (if (string= dir (expand-file-name default-directory))
 			     (goto-char (point-min))
@@ -2805,7 +2815,9 @@ It runs the hook `dired-initial-position-hook'."
 (defun dired-current-directory (&optional localp)
   "Return the name of the subdirectory to which this line belongs.
 This returns a string with trailing slash, like `default-directory'.
-Optional argument means return a file name relative to `default-directory'."
+Optional argument means return a file name relative to `default-directory',
+in which case the value could be an empty string if `default-directory'
+is the directory where the file on this line resides."
   (let ((here (point))
 	(alist (or dired-subdir-alist
 		   ;; probably because called in a non-dired buffer
@@ -3341,7 +3353,12 @@ object files--just `.o' will mark more than you might think."
 (defun dired-mark-files-containing-regexp (regexp &optional marker-char)
   "Mark all files with contents containing REGEXP for use in later commands.
 A prefix argument means to unmark them instead.
-`.' and `..' are never marked."
+`.' and `..' are never marked.
+
+Note that if a file is visited in an Emacs buffer, this command will
+look in the buffer without revisiting the file, so the results might
+be inconsistent with the file on disk if its contents has changed
+since it was last visited."
   (interactive
    (list (read-regexp (concat (if current-prefix-arg "Unmark" "Mark")
                               " files containing (regexp): ")
@@ -3902,7 +3919,7 @@ Ask means pop up a menu for the user to select one of copy, move or link."
 
 ;;; Start of automatically extracted autoloads.
 
-;;;### (autoloads nil "dired-aux" "dired-aux.el" "29842a53d6651f8f535ec8e02d20d7cc")
+;;;### (autoloads nil "dired-aux" "dired-aux.el" "17b411edeac40022109eb6f705b83079")
 ;;; Generated autoloads from dired-aux.el
 
 (autoload 'dired-diff "dired-aux" "\
@@ -4405,6 +4422,16 @@ with the command \\[tags-loop-continue].
 
 \(fn FROM TO &optional DELIMITED)" t nil)
 
+(autoload 'dired-do-find-regexp "dired-aux" "\
+Find all matches for REGEXP in all marked files, recursively.
+
+\(fn REGEXP)" t nil)
+
+(autoload 'dired-do-find-regexp-and-replace "dired-aux" "\
+Replace matches of FROM with TO, in all marked files, recursively.
+
+\(fn FROM TO)" t nil)
+
 (autoload 'dired-show-file-type "dired-aux" "\
 Print the type of FILE, according to the `file' command.
 If you give a prefix to this command, and FILE is a symbolic
@@ -4415,7 +4442,7 @@ instead.
 
 ;;;***
 
-;;;### (autoloads nil "dired-x" "dired-x.el" "06f532e2e812fa1cb10ade31249e9700")
+;;;### (autoloads nil "dired-x" "dired-x.el" "f00ad5ec7383d017263855ad8add60a3")
 ;;; Generated autoloads from dired-x.el
 
 (autoload 'dired-jump "dired-x" "\

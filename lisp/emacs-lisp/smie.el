@@ -1,6 +1,6 @@
 ;;; smie.el --- Simple Minded Indentation Engine -*- lexical-binding: t -*-
 
-;; Copyright (C) 2010-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2010-2016 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: languages, lisp, internal, parsing, indentation
@@ -717,9 +717,10 @@ Possible return values:
                      (goto-char pos)
                      (throw 'return
                             (list t epos
-                                  (buffer-substring-no-properties
-                                   epos
-                                   (+ epos (if (< (point) epos) -1 1))))))))
+                                  (unless (= (point) epos)
+                                    (buffer-substring-no-properties
+                                     epos
+                                     (+ epos (if (< (point) epos) -1 1)))))))))
                 (if (eq pos (point))
                     ;; We did not move, so let's abort the loop.
                     (throw 'return (list t (point))))))
@@ -809,7 +810,12 @@ Possible return values:
   nil: we skipped over an identifier, matched parentheses, ..."
   (smie-next-sexp
    (indirect-function smie-backward-token-function)
-   (indirect-function #'backward-sexp)
+   (lambda (n)
+     (if (bobp)
+         ;; Arguably backward-sexp should signal this error for us.
+         (signal 'scan-error
+                 (list "Beginning of buffer" (point) (point)))
+       (backward-sexp n)))
    (indirect-function #'smie-op-left)
    (indirect-function #'smie-op-right)
    halfsexp))
@@ -1487,7 +1493,10 @@ should not be computed on the basis of the following token."
                            (let ((endpos (point)))
                              (goto-char pos)
                              (forward-line 1)
-                             (and (equal res (smie-indent-forward-token))
+                             ;; As seen in bug#22960, pos may be inside
+                             ;; a string, and forward-token may then stumble.
+                             (and (ignore-errors
+                                    (equal res (smie-indent-forward-token)))
                                   (eq (point) endpos)))))
                     nil
                   (goto-char pos)

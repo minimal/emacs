@@ -1,6 +1,6 @@
 ;;; cc-defs.el --- compile time definitions for CC Mode
 
-;; Copyright (C) 1985, 1987, 1992-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1985, 1987, 1992-2016 Free Software Foundation, Inc.
 
 ;; Authors:    2003- Alan Mackenzie
 ;;             1998- Martin Stjernholm
@@ -75,37 +75,22 @@
 
 ;; cc-fix.el contains compatibility macros that should be used if
 ;; needed.
-(eval-and-compile
-  (if (or (/= (regexp-opt-depth "\\(\\(\\)\\)") 2)
-	  (not (fboundp 'push)))
-      (cc-load "cc-fix")))
+(cc-conditional-require
+ 'cc-fix (or (/= (regexp-opt-depth "\\(\\(\\)\\)") 2)
+	     (not (fboundp 'push))
+	     ;; XEmacs 21.4 doesn't have `delete-dups'.
+	     (not (fboundp 'delete-dups))))
 
-(when (featurep 'xemacs) ; There is now (2005/12) code in GNU Emacs CVS
-			 ; to make the call to f-l-c-k throw an error.
-  (eval-after-load "font-lock"
-    '(if (and (not (featurep 'cc-fix))	; only load the file once.
-	      (let (font-lock-keywords)
-		(font-lock-compile-keywords '("\\<\\>"))
-		font-lock-keywords)) ; did the previous call foul this up?
-         (load "cc-fix"))))
+(cc-conditional-require-after-load
+ 'cc-fix "font-lock"
+ (and
+  (featurep 'xemacs)
+  (progn
+    (require 'font-lock)
+    (let (font-lock-keywords)
+      (font-lock-compile-keywords '("\\<\\>"))
+      font-lock-keywords))))
 
-;; The above takes care of the delayed loading, but this is necessary
-;; to ensure correct byte compilation.
-(eval-when-compile
-  (if (and (featurep 'xemacs)
-	   (not (featurep 'cc-fix))
-	   (progn
-	     (require 'font-lock)
-	     (let (font-lock-keywords)
-	       (font-lock-compile-keywords '("\\<\\>"))
-	       font-lock-keywords)))
-      (cc-load "cc-fix")))
-
-;; XEmacs 21.4 doesn't have `delete-dups'.
-(eval-and-compile
-  (if (and (not (fboundp 'delete-dups))
-	   (not (featurep 'cc-fix)))
-      (cc-load "cc-fix")))
 
 ;;; Variables also used at compile time.
 
@@ -669,23 +654,35 @@ right side of it."
 ;; Wrappers for common scan-lists cases, mainly because it's almost
 ;; impossible to get a feel for how that function works.
 
-(defmacro c-go-list-forward ()
-  "Move backward across one balanced group of parentheses.
+(defmacro c-go-list-forward (&optional pos limit)
+  "Move forward across one balanced group of parentheses starting at POS or
+point.  Return POINT when we succeed, NIL when we fail.  In the latter case,
+leave point unmoved.
 
-Return POINT when we succeed, NIL when we fail.  In the latter case, leave
-point unmoved."
-  `(c-safe (let ((endpos (scan-lists (point) 1 0)))
-	     (goto-char endpos)
-	     endpos)))
+A LIMIT for the search may be given.  The start position is assumed to be
+before it."
+  (let ((res `(c-safe (goto-char (scan-lists ,(or pos `(point)) 1 0)) (point))))
+    (if limit
+	`(save-restriction
+	   (if ,limit
+	       (narrow-to-region (point-min) ,limit))
+	   ,res)
+      res)))
 
-(defmacro c-go-list-backward ()
-  "Move backward across one balanced group of parentheses.
+(defmacro c-go-list-backward (&optional pos limit)
+  "Move backward across one balanced group of parentheses starting at POS or
+point.  Return POINT when we succeed, NIL when we fail.  In the latter case,
+leave point unmoved.
 
-Return POINT when we succeed, NIL when we fail.  In the latter case, leave
-point unmoved."
-  `(c-safe (let ((endpos (scan-lists (point) -1 0)))
-	     (goto-char endpos)
-	     endpos)))
+A LIMIT for the search may be given.  The start position is assumed to be
+after it."
+  (let ((res `(c-safe (goto-char (scan-lists ,(or pos `(point)) -1 0)) (point))))
+    (if limit
+	`(save-restriction
+	   (if ,limit
+	       (narrow-to-region ,limit (point-max)))
+	   ,res)
+      res)))
 
 (defmacro c-up-list-forward (&optional pos limit)
   "Return the first position after the list sexp containing POS,
@@ -1261,7 +1258,8 @@ been put there by c-put-char-property.  POINT remains unchanged."
 (def-edebug-spec c-clear-char-property t)
 (def-edebug-spec c-clear-char-properties t)
 (def-edebug-spec c-put-overlay t)
-(def-edebug-spec c-delete-overlay t) ;))
+(def-edebug-spec c-delete-overlay t)
+(def-edebug-spec c-self-bind-state-cache t);))
 
 
 ;;; Functions.
@@ -1400,7 +1398,43 @@ been put there by c-put-char-property.  POINT remains unchanged."
        (save-restriction
 	 (widen)
 	 (c-set-cpp-delimiters ,beg ,end)))))
-
+
+(defmacro c-self-bind-state-cache (&rest forms)
+  ;; Bind the state cache to itself and execute the FORMS.  Return the result
+  ;; of the last FORM executed.  It is assumed that no buffer changes will
+  ;; happen in FORMS, and no hidden buffer changes which could affect the
+  ;; parsing will be made by FORMS.
+  `(let* ((c-state-cache (copy-tree c-state-cache))
+	  (c-state-cache-good-pos c-state-cache-good-pos)
+	  ;(c-state-nonlit-pos-cache (copy-tree c-state-nonlit-pos-cache))
+          ;(c-state-nonlit-pos-cache-limit c-state-nonlit-pos-cache-limit)
+          ;(c-state-semi-nonlit-pos-cache (copy-tree c-state-semi-nonlit-pos-cache))
+          ;(c-state-semi-nonlit-pos-cache-limit c-state-semi-nonlit-pos-cache)
+	  (c-state-brace-pair-desert (copy-tree c-state-brace-pair-desert))
+	  (c-state-point-min c-state-point-min)
+	  (c-state-point-min-lit-type c-state-point-min-lit-type)
+	  (c-state-point-min-lit-start c-state-point-min-lit-start)
+	  (c-state-min-scan-pos c-state-min-scan-pos)
+	  (c-state-old-cpp-beg-marker (if (markerp c-state-old-cpp-beg-marker)
+					  (copy-marker c-state-old-cpp-beg-marker)
+					c-state-old-cpp-beg-marker))
+	  (c-state-old-cpp-beg (if (markerp c-state-old-cpp-beg)
+				   c-state-old-cpp-beg-marker
+				 c-state-old-cpp-beg))
+	  (c-state-old-cpp-end-marker (if (markerp c-state-old-cpp-end-marker)
+					  (copy-marker c-state-old-cpp-end-marker)
+					c-state-old-cpp-end-marker))
+	  (c-state-old-cpp-end (if (markerp c-state-old-cpp-end)
+				   c-state-old-cpp-end-marker
+				 c-state-old-cpp-end))
+	  (c-parse-state-state c-parse-state-state))
+     (prog1
+	 (progn ,@forms)
+       (if (markerp c-state-old-cpp-beg-marker)
+	   (move-marker c-state-old-cpp-beg-marker nil))
+       (if (markerp c-state-old-cpp-end-marker)
+	   (move-marker c-state-old-cpp-end-marker nil)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; The following macros are to be used only in `c-parse-state' and its
 ;; subroutines.  Their main purpose is to simplify the handling of C++/Java

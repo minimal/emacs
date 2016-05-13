@@ -1,6 +1,6 @@
 ;;; vc-bzr.el --- VC backend for the bzr revision control system  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2016 Free Software Foundation, Inc.
 
 ;; Author: Dave Love <fx@gnu.org>
 ;; 	   Riccardo Murri <riccardo.murri@gmail.com>
@@ -517,7 +517,7 @@ in the branch repository (or whose status not be determined)."
     ;; elisp function to remerge from the .BASE/OTHER/THIS files.
     (smerge-start-session)
     (add-hook 'after-save-hook 'vc-bzr-resolve-when-done nil t)
-    (message "There are unresolved conflicts in this file")))
+    (vc-message-unresolved-conflicts buffer-file-name)))
 
 (defun vc-bzr-version-dirstate (dir)
   "Try to return as a string the bzr revision ID of directory DIR.

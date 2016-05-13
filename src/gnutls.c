@@ -1,12 +1,12 @@
 /* GnuTLS glue for GNU Emacs.
-   Copyright (C) 2010-2015 Free Software Foundation, Inc.
+   Copyright (C) 2010-2016 Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -781,10 +781,11 @@ static Lisp_Object
 gnutls_hex_string (unsigned char *buf, ptrdiff_t buf_size, const char *prefix)
 {
   ptrdiff_t prefix_length = strlen (prefix);
-  if ((STRING_BYTES_BOUND - prefix_length) / 3 < buf_size)
+  ptrdiff_t retlen;
+  if (INT_MULTIPLY_WRAPV (buf_size, 3, &retlen)
+      || INT_ADD_WRAPV (prefix_length - (buf_size != 0), retlen, &retlen))
     string_overflow ();
-  Lisp_Object ret = make_uninit_string (prefix_length + 3 * buf_size
-					- (buf_size != 0));
+  Lisp_Object ret = make_uninit_string (retlen);
   char *string = SSDATA (ret);
   strcpy (string, prefix);
 
@@ -1111,15 +1112,17 @@ The return value is a property list with top-level keys :warnings and
 /* Initialize global GnuTLS state to defaults.
    Call `gnutls-global-deinit' when GnuTLS usage is no longer needed.
    Return zero on success.  */
-static Lisp_Object
+Lisp_Object
 emacs_gnutls_global_init (void)
 {
   int ret = GNUTLS_E_SUCCESS;
 
   if (!gnutls_global_initialized)
-    ret = gnutls_global_init ();
-
-  gnutls_global_initialized = 1;
+    {
+      ret = gnutls_global_init ();
+      if (ret == GNUTLS_E_SUCCESS)
+	gnutls_global_initialized = 1;
+    }
 
   return gnutls_make_error (ret);
 }

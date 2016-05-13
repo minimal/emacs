@@ -1,6 +1,6 @@
 ;;; message-mode-tests.el --- Tests for message-mode  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2015 Free Software Foundation, Inc.
+;; Copyright (C) 2015-2016 Free Software Foundation, Inc.
 
 ;; Author: João Távora <joaotavora@gmail.com>
 
@@ -40,9 +40,9 @@
                   "and here's a closer ")
           (let ((last-command-event ?\)))
             (ert-simulate-command '(self-insert-command 1)))
-          ;; Syntax propertization doesn't kick in batch mode
-          (when noninteractive
-            (syntax-propertize (point-max)))
+          ;; Auto syntax propertization doesn't kick in until
+          ;; parse-sexp-lookup-properties is set.
+          (setq-local parse-sexp-lookup-properties t)
           (backward-sexp)
           (should (string= "here's an opener "
                            (buffer-substring-no-properties

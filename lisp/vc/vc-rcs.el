@@ -1,6 +1,6 @@
 ;;; vc-rcs.el --- support for RCS version-control  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992-2016 Free Software Foundation, Inc.
 
 ;; Author:     FSF (see vc.el for full credits)
 ;; Maintainer: Andre Spiegel <spiegel@gnu.org>
@@ -534,10 +534,11 @@ files beneath it."
     (vc-rcs-print-log-cleanup))
   (when limit 'limit-unsupported))
 
-(defun vc-rcs-diff (files &optional oldvers newvers buffer async)
+(defun vc-rcs-diff (files &optional oldvers newvers buffer _async)
   "Get a difference report using RCS between two sets of files."
   (apply #'vc-do-command (or buffer "*vc-diff*")
-	 (if async 'async 1)
+	 ;; The repo is local, so this is fast anyway.
+	 1 ; bug#21969
 	 "rcsdiff" (vc-expand-dirs files 'RCS)
          (append (list "-q"
                        (and oldvers (concat "-r" oldvers))

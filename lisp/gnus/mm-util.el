@@ -1,6 +1,6 @@
 ;;; mm-util.el --- Utility functions for Mule and low level things
 
-;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2016 Free Software Foundation, Inc.
 
 ;; Author: Lars Magne Ingebrigtsen <larsi@gnus.org>
 ;;	MORIOKA Tomohiko <morioka@jaist.ac.jp>
@@ -496,9 +496,9 @@ Unless LIST is given, `mm-codepage-ibm-list' is used."
       (windows-1257 . (mm-codepage-setup 1257 t))))
   "An alist of (CHARSET . FORM) pairs.
 If an article is encoded in an unknown CHARSET, FORM is
-evaluated.  This allows to load additional libraries providing
-charsets on demand.  If supported by your Emacs version, you
-could use `autoload-coding-system' here."
+evaluated.  This allows the loading of additional libraries
+providing charsets on demand.  If supported by your Emacs
+version, you could use `autoload-coding-system' here."
   :version "22.1" ;; Gnus 5.10.9
   :type '(list (set :inline t
 		    (const (windows-1250 . (mm-codepage-setup 1250 t)))
@@ -1074,7 +1074,7 @@ can be encoded using a single one of the corresponding coding systems.
 
 It treats `mm-coding-system-priorities' as the list of preferred
 coding systems; a useful example setting for this list in Western
-Europe would be '(iso-8859-1 iso-8859-15 utf-8), which would default
+Europe would be (iso-8859-1 iso-8859-15 utf-8), which would default
 to the very standard Latin 1 coding system, and only move to coding
 systems that are less supported as is necessary to encode the
 characters that exist in the buffer.

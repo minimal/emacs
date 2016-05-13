@@ -1,6 +1,6 @@
 ;;; mairix.el --- Mairix interface for Emacs
 
-;; Copyright (C) 2008-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2008-2016 Free Software Foundation, Inc.
 
 ;; Author: David Engster <dengste@eml.cc>
 ;; Keywords: mail searching
@@ -211,7 +211,7 @@ nil for disabling this).")
 (defvar mairix-widget-other
   '(threads flags)
   "Other editable mairix commands when using customization widgets.
-Currently there are 'threads and 'flags.")
+Currently there are `threads' and `flags'.")
 
 ;;;; Internal variables
 

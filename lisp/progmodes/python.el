@@ -1,6 +1,6 @@
 ;;; python.el --- Python's flying circus support for Emacs -*- lexical-binding: t -*-
 
-;; Copyright (C) 2003-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2003-2016 Free Software Foundation, Inc.
 
 ;; Author: Fabián E. Gallina <fgallina@gnu.org>
 ;; URL: https://github.com/fgallina/python.el
@@ -273,7 +273,7 @@
 (autoload 'help-function-arglist "help-fns")
 
 ;;;###autoload
-(add-to-list 'auto-mode-alist (cons (purecopy "\\.py\\'")  'python-mode))
+(add-to-list 'auto-mode-alist (cons (purecopy "\\.pyw?\\'")  'python-mode))
 ;;;###autoload
 (add-to-list 'interpreter-mode-alist (cons (purecopy "python[0-9.]*") 'python-mode))
 
@@ -282,18 +282,6 @@
   :group 'languages
   :version "24.3"
   :link '(emacs-commentary-link "python"))
-
-
-;;; 24.x Compat
-
-
-(unless (fboundp 'prog-widen)
-  (defun prog-widen ()
-    (widen)))
-
-(unless (fboundp 'prog-first-column)
-  (defun prog-first-column ()
-    0))
 
 
 ;;; Bindings
@@ -485,7 +473,7 @@ The type returned can be `comment', `string' or `paren'."
      ((nth 1 ppss) 'paren))))
 
 (defsubst python-syntax-comment-or-string-p (&optional ppss)
-  "Return non-nil if PPSS is inside 'comment or 'string."
+  "Return non-nil if PPSS is inside comment or string."
   (nth 8 (or ppss (syntax-ppss))))
 
 (defsubst python-syntax-closing-paren-p ()
@@ -715,6 +703,7 @@ It makes underscores and dots word constituent chars.")
 
 (defcustom python-indent-guess-indent-offset-verbose t
   "Non-nil means to emit a warning when indentation guessing fails."
+  :version "25.1"
   :type 'boolean
   :group 'python
   :safe' booleanp)
@@ -760,7 +749,7 @@ work on `python-indent-calculate-indentation' instead."
   (interactive)
   (save-excursion
     (save-restriction
-      (prog-widen)
+      (widen)
       (goto-char (point-min))
       (let ((block-end))
         (while (and (not block-end)
@@ -859,7 +848,7 @@ keyword
  - Point is on a line starting a dedenter block.
  - START is the position where the dedenter block starts."
   (save-restriction
-    (prog-widen)
+    (widen)
     (let ((ppss (save-excursion
                   (beginning-of-line)
                   (syntax-ppss))))
@@ -1006,10 +995,10 @@ current context or a list of integers.  The latter case is only
 happening for :at-dedenter-block-start context since the
 possibilities can be narrowed to specific indentation points."
   (save-restriction
-    (prog-widen)
+    (widen)
     (save-excursion
       (pcase (python-indent-context)
-        (`(:no-indent . ,_) (prog-first-column)) ; usually 0
+        (`(:no-indent . ,_) 0)
         (`(,(or :after-line
                 :after-comment
                 :inside-string
@@ -1047,7 +1036,7 @@ possibilities can be narrowed to specific indentation points."
          (let ((opening-block-start-points
                 (python-info-dedenter-opening-block-positions)))
            (if (not opening-block-start-points)
-               (prog-first-column) ; if not found default to first column
+               0  ; if not found default to first column
              (mapcar (lambda (pos)
                        (save-excursion
                          (goto-char pos)
@@ -1065,7 +1054,7 @@ integers.  Levels are returned in ascending order, and in the
 case INDENTATION is a list, this order is enforced."
   (if (listp indentation)
       (sort (copy-sequence indentation) #'<)
-    (nconc (number-sequence (prog-first-column) (1- indentation)
+    (nconc (number-sequence 0 (1- indentation)
                             python-indent-offset)
            (list indentation))))
 
@@ -1090,7 +1079,7 @@ minimum."
         (python-indent--previous-level levels (current-indentation))
       (if levels
           (apply #'max levels)
-        (prog-first-column)))))
+        0))))
 
 (defun python-indent-line (&optional previous)
   "Internal implementation of `python-indent-line-function'.
@@ -1842,7 +1831,7 @@ This command assumes point is not in a string or comment."
 
 (defun python-nav-if-name-main ()
   "Move point at the beginning the __main__ block.
-When \"if __name__ == '__main__':\" is found returns its
+When \"if __name__ == \\='__main__\\=':\" is found returns its
 position, else returns nil."
   (interactive)
   (let ((point (point))
@@ -1999,6 +1988,7 @@ hosts PATH before starting processes.  Values defined in
 here.  Normally you wont use this variable directly unless you
 plan to ensure a particular set of paths to all Python shell
 executed through tramp connections."
+  :version "25.1"
   :type '(repeat string)
   :group 'python)
 
@@ -2621,6 +2611,7 @@ current process to not hang waiting for output by safeguarding
 interactive actions can be performed.  This is useful to safely
 attach setup code for long-running processes that eventually
 provide a shell."
+  :version "25.1"
   :type 'hook
   :group 'python)
 
@@ -2734,7 +2725,7 @@ killed."
                  (process (get-buffer-process buffer))
                  ;; Users can override the interpreter and args
                  ;; interactively when calling `run-python', let-binding
-                 ;; these allows to have the new right values in all
+                 ;; these allows having the new right values in all
                  ;; setup code that is done in `inferior-python-mode',
                  ;; which is important, especially for prompt detection.
                  (python-shell--interpreter interpreter)
@@ -3051,7 +3042,7 @@ the python shell:
 (defun python-shell-send-region (start end &optional send-main msg)
   "Send the region delimited by START and END to inferior Python process.
 When optional argument SEND-MAIN is non-nil, allow execution of
-code inside blocks delimited by \"if __name__== '__main__':\".
+code inside blocks delimited by \"if __name__== \\='__main__\\=':\".
 When called interactively SEND-MAIN defaults to nil, unless it's
 called with prefix argument.  When optional argument MSG is
 non-nil, forces display of a user-friendly message if there's no
@@ -3068,7 +3059,7 @@ process running; defaults to t when called interactively."
 (defun python-shell-send-buffer (&optional send-main msg)
   "Send the entire buffer to inferior Python process.
 When optional argument SEND-MAIN is non-nil, allow execution of
-code inside blocks delimited by \"if __name__== '__main__':\".
+code inside blocks delimited by \"if __name__== \\='__main__\\=':\".
 When called interactively SEND-MAIN defaults to nil, unless it's
 called with prefix argument.  When optional argument MSG is
 non-nil, forces display of a user-friendly message if there's no
@@ -3258,18 +3249,22 @@ the full statement in the case of imports."
   (list "pypy")
   "List of disabled interpreters.
 When a match is found, native completion is disabled."
+  :version "25.1"
   :type '(repeat string))
 
 (defcustom python-shell-completion-native-enable t
   "Enable readline based native completion."
+  :version "25.1"
   :type 'boolean)
 
 (defcustom python-shell-completion-native-output-timeout 5.0
   "Time in seconds to wait for completion output before giving up."
+  :version "25.1"
   :type 'float)
 
 (defcustom python-shell-completion-native-try-output-timeout 1.0
   "Time in seconds to wait for *trying* native completion output."
+  :version "25.1"
   :type 'float)
 
 (defvar python-shell-completion-native-redirect-buffer
@@ -3344,7 +3339,7 @@ def __PYTHON_EL_native_completion_setup():
                 if not completion:
                     if self.last_completion != '1__dummy_completion__':
                         # When no more completions are available, returning a
-                        # dummy with non-sharing prefix allow to ensure output
+                        # dummy with non-sharing prefix allow ensuring output
                         # while preventing changes to current input.
                         # Coincidentally it's also the end of output.
                         completion = '1__dummy_completion__'
@@ -3569,7 +3564,9 @@ using that one instead of current buffer's process."
               (forward-char (length (match-string-no-properties 0)))
               (point))))
          (end (point))
-         (prompt-boundaries (python-util-comint-last-prompt))
+         (prompt-boundaries
+          (with-current-buffer (process-buffer process)
+            (python-util-comint-last-prompt)))
          (prompt
           (with-current-buffer (process-buffer process)
             (when prompt-boundaries
@@ -4470,7 +4467,7 @@ Optional argument INCLUDE-TYPE indicates to include the type of the defun.
 This function can be used as the value of `add-log-current-defun-function'
 since it returns nil if point is not inside a defun."
   (save-restriction
-    (prog-widen)
+    (widen)
     (save-excursion
       (end-of-line 1)
       (let ((names)
@@ -4653,7 +4650,7 @@ likely an invalid python file."
   (let ((point (python-info-dedenter-opening-block-position)))
     (when point
       (save-restriction
-        (prog-widen)
+        (widen)
         (message "Closes %s" (save-excursion
                                (goto-char point)
                                (buffer-substring
@@ -4674,7 +4671,7 @@ statement."
 With optional argument LINE-NUMBER, check that line instead."
   (save-excursion
     (save-restriction
-      (prog-widen)
+      (widen)
       (when line-number
         (python-util-goto-line line-number))
       (while (and (not (eobp))
@@ -4690,7 +4687,7 @@ With optional argument LINE-NUMBER, check that line instead."
 Optional argument LINE-NUMBER forces the line number to check against."
   (save-excursion
     (save-restriction
-      (prog-widen)
+      (widen)
       (when line-number
         (python-util-goto-line line-number))
       (when (python-info-line-ends-backslash-p)
@@ -4707,7 +4704,7 @@ When current line is continuation of another return the point
 where the continued line ends."
   (save-excursion
     (save-restriction
-      (prog-widen)
+      (widen)
       (let* ((context-type (progn
                              (back-to-indentation)
                              (python-syntax-context-type)))

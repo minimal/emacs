@@ -1,6 +1,6 @@
 ;;; sql.el --- specialized comint.el for SQL interpreters  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1998-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1998-2016 Free Software Foundation, Inc.
 
 ;; Author: Alex Schroeder <alex@gnu.org>
 ;; Maintainer: Michael Mauger <michael@mauger.com>
@@ -2987,7 +2987,7 @@ supported:
     :number t
 
 In order to ask the user for username, password and database, call the
-function like this: (sql-get-login 'user 'password 'database)."
+function like this: (sql-get-login \\='user \\='password \\='database)."
   (dolist (w what)
     (let ((plist (cdr-safe w)))
       (pcase (or (car-safe w) w)
@@ -4891,7 +4891,7 @@ your might try undecided-dos as a coding system.  If this doesn't help,
 Try to set `comint-output-filter-functions' like this:
 
 \(setq comint-output-filter-functions (append comint-output-filter-functions
-					     '(comint-strip-ctrl-m)))
+					     \\='(comint-strip-ctrl-m)))
 
 \(Type \\[describe-mode] in the SQL buffer for a list of commands.)"
   (interactive "P")
@@ -4948,8 +4948,8 @@ Try to set `comint-output-filter-functions' like this:
       ;; Return the list of table names (public schema name can be omitted)
       (mapcar #'(lambda (tbl)
                   (if (string= (car tbl) "public")
-                      (cadr tbl)
-                    (format "%s.%s" (car tbl) (cadr tbl))))
+                      (format "\"%s\"" (cadr tbl))
+                    (format "\"%s\".\"%s\"" (car tbl) (cadr tbl))))
               cl))))
 
 

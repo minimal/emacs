@@ -1,6 +1,6 @@
 ;;; tramp-smb.el --- Tramp access functions for SMB servers
 
-;; Copyright (C) 2002-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2002-2016 Free Software Foundation, Inc.
 
 ;; Author: Michael Albinus <michael.albinus@gmx.de>
 ;; Keywords: comm, processes
@@ -232,10 +232,10 @@ See `tramp-actions-before-shell' for more info.")
     (file-acl . tramp-smb-handle-file-acl)
     (file-attributes . tramp-smb-handle-file-attributes)
     (file-directory-p .  tramp-smb-handle-file-directory-p)
-    ;; `file-equal-p' performed by default handler.
+    (file-file-equal-p . tramp-handle-file-equal-p)
     (file-executable-p . tramp-handle-file-exists-p)
     (file-exists-p . tramp-handle-file-exists-p)
-    ;; `file-in-directory-p' performed by default handler.
+    (file-in-directory-p . tramp-handle-file-in-directory-p)
     (file-local-copy . tramp-smb-handle-file-local-copy)
     (file-modes . tramp-handle-file-modes)
     (file-name-all-completions . tramp-smb-handle-file-name-all-completions)
@@ -1914,7 +1914,10 @@ If ARGUMENT is non-nil, use it as argument for
 		    ;; character by character; if we send the string
 		    ;; at once, it is read painfully slow.
 		    (tramp-set-connection-property p "smb-share" share)
-		    (tramp-set-connection-property p "chunksize" 1))
+		    (tramp-set-connection-property p "chunksize" 1)
+
+		    ;; Mark it as connected.
+		    (tramp-set-connection-property p "connected" t))
 
 		;; Check for the error reason.  If it was due to wrong
 		;; password, reestablish the connection.  We cannot

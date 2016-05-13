@@ -157,7 +157,7 @@ CC Mode
 @copying
 This manual is for CC Mode in Emacs.
 
-Copyright @copyright{} 1995--2015 Free Software Foundation, Inc.
+Copyright @copyright{} 1995--2016 Free Software Foundation, Inc.
 
 @quotation
 Permission is granted to copy, distribute and/or modify this document
@@ -2461,7 +2461,7 @@ handled a little differently from the other style variables.  It's
 default global binding is the empty list @code{nil}, rather than
 @code{set-from-style}.  Before the style system is initialized, you
 can add individual elements to @code{c-offsets-alist} by calling
-@code{c-set-offset}(@pxref{c-offsets-alist}) just like you would set
+@code{c-set-offset} (@pxref{c-offsets-alist}) just like you would set
 other style variables with @code{setq}.  Those elements will then
 prevail when the style system later initializes a buffer-local copy of
 @code{c-offsets-alist}.
@@ -3887,9 +3887,19 @@ of the variables associated with indentation, not even
 @cindex syntactic element
 @cindex syntactic context
 The first thing @ccmode{} does when indenting a line of code, is to
-analyze the line, determining the @dfn{syntactic context} of the
-(first) construct on that line.  It's a list of @dfn{syntactic
-elements}, where each syntactic element in turn is a list@footnote{In
+analyze the line by calling @code{c-guess-basic-syntax}, determining
+the syntactic context of the (first) construct on that line.  Although
+this function is mainly used internally, it can sometimes be useful in
+Line-up functions (@pxref{Custom Line-Up}) or in functions on
+@code{c-special-indent-hook} (@pxref{Other Indentation}).
+
+@defun c-guess-basic-syntax
+@findex guess-basic-syntax (c-)
+Determine the syntactic context of the current line.
+@end defun
+
+The @dfn{syntactic context} is a list of @dfn{syntactic elements},
+where each syntactic element in turn is a list@footnote{In
 @ccmode 5.28 and earlier, a syntactic element was a dotted pair; the
 cons was the syntactic symbol and the cdr was the anchor position.
 For compatibility's sake, the parameter passed to a line-up function
@@ -5234,13 +5244,13 @@ This command changes the entry for a syntactic symbol in the current
 binding of @code{c-offsets-alist}, or it inserts a new entry if there
 isn't already one for that syntactic symbol.
 
-You can use @code{c-set-offsets} interactively within a @ccmode{}
+You can use @code{c-set-offset} interactively within a @ccmode{}
 buffer to make experimental changes to your indentation settings.
 @kbd{C-c C-o} prompts you for the syntactic symbol to change
 (defaulting to that of the current line) and the new offset
 (defaulting to the current offset).
 
-@code{c-set-offsets} takes two arguments when used programmatically:
+@code{c-set-offset} takes two arguments when used programmatically:
 @var{symbol}, the syntactic element symbol to change and @var{offset},
 the new offset for that syntactic element.  You can call the command
 in your @file{.emacs} to change the global binding of
@@ -6553,6 +6563,11 @@ only meaningful when used on syntactic elements taken from
 @code{c-syntactic-element} or @code{c-syntactic-context}.
 @end defun
 
+Sometimes you may need to use the syntactic context of a line other
+than the one being indented.  You can determine this by (temporarily)
+moving point onto this line and calling @code{c-guess-basic-syntax}
+(@pxref{Syntactic Analysis}).
+
 Custom line-up functions can be as simple or as complex as you like, and
 any syntactic symbol that appears in @code{c-offsets-alist} can have a
 custom line-up function associated with it.
@@ -6860,7 +6875,7 @@ to change some of the actual values.
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 @node    Performance Issues, Limitations and Known Bugs, Sample Init File, Top
 @comment node-name, next, previous, up
-@chapter Performance Issues
+@appendix Performance Issues
 @cindex performance
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -6969,7 +6984,7 @@ more info.
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 @node    Limitations and Known Bugs, FAQ, Performance Issues, Top
 @comment node-name, next, previous, up
-@chapter Limitations and Known Bugs
+@appendix Limitations and Known Bugs
 @cindex limitations
 @cindex bugs
 @comment !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

@@ -4,7 +4,7 @@ dnl	autoconf
 dnl in the directory containing this script.
 dnl If you changed any AC_DEFINES, also run autoheader.
 dnl
-dnl Copyright (C) 1994-1996, 1999-2015 Free Software Foundation, Inc.
+dnl Copyright (C) 1994-1996, 1999-2016 Free Software Foundation, Inc.
 dnl
 dnl  This file is part of GNU Emacs.
 dnl
@@ -23,7 +23,7 @@ dnl  along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
 
 AC_PREREQ(2.65)
 dnl Note this is parsed by (at least) make-dist and lisp/cedet/ede/emacs.el.
-AC_INIT(GNU Emacs, 25.0.50, bug-gnu-emacs@gnu.org)
+AC_INIT(GNU Emacs, 25.0.93, bug-gnu-emacs@gnu.org)
 
 dnl Set emacs_config_options to the options of 'configure', quoted for the shell,
 dnl and then quoted again for a C string.  Separate options with spaces.
@@ -33,7 +33,7 @@ emacs_config_options=
 optsep=
 dnl This is the documented way to record the args passed to configure,
 dnl rather than $ac_configure_args.
-for opt in ${1+"$@"} CFLAGS CPPFLAGS LDFLAGS; do
+for opt in "$@" CFLAGS CPPFLAGS LDFLAGS; do
   case $opt in
     -n | --no-create | --no-recursion)
       continue ;;
@@ -316,7 +316,7 @@ this option's value should be 'yes', 'no', 'lucid', 'athena', 'motif', 'gtk',
 	  with_x_toolkit=$val
 ])
 
-OPTION_DEFAULT_OFF([wide-int], [prefer wide Emacs integers (typically 62-bit)])
+OPTION_DEFAULT_OFF([wide-int], [prefer wide Emacs integers (typically 62-bit); allows buffer and string size up to 2GB on 32-bit hosts, at the cost of 10% to 30% slowdown of Lisp interpreter and larger memory footprint])
 if test "$with_wide_int" = yes; then
   AC_DEFINE([WIDE_EMACS_INT], 1, [Use long long for EMACS_INT if available.])
 fi
@@ -330,7 +330,7 @@ OPTION_DEFAULT_ON([tiff],[don't compile with TIFF image support])
 OPTION_DEFAULT_ON([gif],[don't compile with GIF image support])
 OPTION_DEFAULT_ON([png],[don't compile with PNG image support])
 OPTION_DEFAULT_ON([rsvg],[don't compile with SVG image support])
-OPTION_DEFAULT_OFF([cairo],[compile with Cairo drawing])
+OPTION_DEFAULT_OFF([cairo],[compile with Cairo drawing (experimental)])
 OPTION_DEFAULT_ON([xml2],[don't compile with XML parsing support])
 OPTION_DEFAULT_ON([imagemagick],[don't compile with ImageMagick image support])
 
@@ -353,24 +353,29 @@ OPTION_DEFAULT_ON([gsettings],[don't compile with GSettings support])
 OPTION_DEFAULT_ON([selinux],[don't compile with SELinux support])
 OPTION_DEFAULT_ON([gnutls],[don't use -lgnutls for SSL/TLS support])
 OPTION_DEFAULT_ON([zlib],[don't compile with zlib decompression support])
+OPTION_DEFAULT_OFF([modules],[compile with dynamic modules support])
 
 AC_ARG_WITH([file-notification],[AS_HELP_STRING([--with-file-notification=LIB],
- [use a file notification library (LIB one of: yes, gfile, inotify, w32, no)])],
+ [use a file notification library (LIB one of: yes, inotify, kqueue, gfile, w32, no)])],
  [ case "${withval}" in
     y | ye | yes )	val=yes ;;
     n | no )		val=no  ;;
-    g | gf | gfi | gfil | gfile )	val=gfile ;;
     i | in | ino | inot | inoti | inotif | inotify )	val=inotify ;;
+    k | kq | kqu | kque | kqueu | kqueue )	val=kqueue ;;
+    g | gf | gfi | gfil | gfile )	val=gfile ;;
     w | w3 | w32 )	val=w32 ;;
     * ) AC_MSG_ERROR(['--with-file-notification=$withval' is invalid;
-this option's value should be 'yes', 'no', 'gfile', 'inotify' or 'w32'.
+this option's value should be 'yes', 'no', 'inotify', 'kqueue', 'gfile' or 'w32'.
 'yes' is a synonym for 'w32' on MS-Windows, for 'no' on Nextstep,
-otherwise for the first of 'inotify' or 'gfile' that is usable.])
+otherwise for the first of 'inotify', 'kqueue' or 'gfile' that is usable.])
     ;;
    esac
    with_file_notification=$val
  ],
  [with_file_notification=$with_features])
+
+OPTION_DEFAULT_OFF([xwidgets],
+  [enable use of some gtk widgets in Emacs buffers (requires gtk3)])
 
 ## For the times when you want to build Emacs but don't have
 ## a suitable makeinfo, and can live without the manuals.
@@ -872,18 +877,19 @@ AC_CACHE_CHECK([whether the compiler is clang], [emacs_cv_clang],
 
 # When compiling with GCC, prefer -isystem to -I when including system
 # include files, to avoid generating useless diagnostics for the files.
-if test "$gl_gcc_warnings" != yes; then
+AS_IF([test "$gl_gcc_warnings" != yes],
+ [
   isystem='-I'
-  if test "$emacs_cv_clang" = yes
-  then
+  AS_IF([test "$emacs_cv_clang" = yes],
+   [
      # Turn off some warnings if supported.
      gl_WARN_ADD([-Wno-switch])
      gl_WARN_ADD([-Wno-tautological-constant-out-of-range-compare])
      gl_WARN_ADD([-Wno-pointer-sign])
      gl_WARN_ADD([-Wno-string-plus-int])
      gl_WARN_ADD([-Wno-unknown-attributes])
-  fi
-else
+   ])
+ ],[
   isystem='-isystem '
 
   # This, $nw, is the list of warnings we disable.
@@ -894,10 +900,9 @@ else
        # Old toolkits mishandle 'const'.
        nw="$nw -Wwrite-strings"
        ;;
-    *)
-       gl_WARN_ADD([-Werror], [WERROR_CFLAGS])
-       ;;
   esac
+  AS_IF([test -z "$nw"],
+    [gl_WARN_ADD([-Werror], [WERROR_CFLAGS])])
   AC_SUBST([WERROR_CFLAGS])
 
   nw="$nw -Wsystem-headers"         # Don't let system headers trigger warnings
@@ -980,7 +985,7 @@ else
 
   gl_MANYWARN_COMPLEMENT([GNULIB_WARN_CFLAGS], [$WARN_CFLAGS], [$nw])
   AC_SUBST([GNULIB_WARN_CFLAGS])
-fi
+ ])
 
 edit_cflags="
   s,///*,/,g
@@ -2102,8 +2107,8 @@ AC_CACHE_CHECK(
 	  [[malloc_set_state (malloc_get_state ());
 	    __after_morecore_hook = hook;
 	    __malloc_initialize_hook = hook;]])],
-       [emacs_cv_var_doug_lea_malloc=yes])])
-   fi
+       [emacs_cv_var_doug_lea_malloc=yes])
+   fi])
 doug_lea_malloc=$emacs_cv_var_doug_lea_malloc
 
 system_malloc=$emacs_cv_sanitize_address
@@ -2198,7 +2203,6 @@ if test "$ac_cv_header_pthread_h" && test "$opsys" != "mingw32"; then
   AC_CACHE_CHECK([for pthread library],
     [emacs_cv_pthread_lib],
     [emacs_cv_pthread_lib=no
-     OLD_CPPFLAGS=$CPPFLAGS
      OLD_LIBS=$LIBS
      for emacs_pthread_lib in 'none needed' -lpthread; do
        case $emacs_pthread_lib in
@@ -2227,8 +2231,7 @@ if test "$ac_cv_header_pthread_h" && test "$opsys" != "mingw32"; then
        if test "$emacs_cv_pthread_lib" != no; then
 	 break
        fi
-     done
-     CPPFLAGS=$OLD_CPPFLAGS])
+     done])
   if test "$emacs_cv_pthread_lib" != no; then
     AC_DEFINE([HAVE_PTHREAD], 1, [Define to 1 if you have POSIX threads.])
     case $emacs_cv_pthread_lib in
@@ -2563,6 +2566,26 @@ if test "${HAVE_GTK}" = "yes"; then
  term_header=gtkutil.h
 fi
 
+
+dnl Enable xwidgets if GTK3 and WebKitGTK+ are available.
+HAVE_XWIDGETS=no
+XWIDGETS_OBJ=
+if test "$with_xwidgets" != "no"; then
+  test "$USE_GTK_TOOLKIT" = "GTK3" && test "$window_system" != "none" ||
+    AC_MSG_ERROR([xwidgets requested but gtk3 not used.])
+
+  WEBKIT_REQUIRED=1.4.0
+  WEBKIT_MODULES="webkitgtk-3.0 >= $WEBKIT_REQUIRED"
+  EMACS_CHECK_MODULES([WEBKIT], [$WEBKIT_MODULES])
+  HAVE_XWIDGETS=$HAVE_WEBKIT
+  test $HAVE_XWIDGETS = yes ||
+    AC_MSG_ERROR([xwidgets requested but WebKitGTK+ not found.])
+
+  XWIDGETS_OBJ=xwidget.o
+  AC_DEFINE([HAVE_XWIDGETS], 1, [Define to 1 if you have xwidgets support.])
+fi
+AC_SUBST(XWIDGETS_OBJ)
+
 CFLAGS=$OLD_CFLAGS
 LIBS=$OLD_LIBS
 
@@ -2690,12 +2713,6 @@ AC_SUBST(LIBGNUTLS_CFLAGS)
 NOTIFY_OBJ=
 NOTIFY_SUMMARY=no
 
-dnl FIXME?  Don't auto-detect on NS, but do allow someone to specify
-dnl a particular library.  This doesn't make much sense?
-if test "${HAVE_NS}" = yes && test ${with_file_notification} = yes; then
-  with_file_notification=no
-fi
-
 dnl MS Windows native file monitor is available for mingw32 only.
 case $with_file_notification,$opsys in
   w32,cygwin)
@@ -2726,16 +2743,44 @@ case $with_file_notification,$NOTIFY_OBJ in
     fi ;;
 esac
 
+dnl kqueue is available on BSD-like systems.
+case $with_file_notification,$NOTIFY_OBJ in
+  kqueue,* | yes,)
+    EMACS_CHECK_MODULES([KQUEUE], [libkqueue])
+    if test "$HAVE_KQUEUE" = "yes"; then
+       AC_DEFINE(HAVE_KQUEUE, 1, [Define to 1 to use kqueue.])
+       CPPFLAGS="$CPPFLAGS -I/usr/include/kqueue"
+       NOTIFY_CFLAGS=$KQUEUE_CFLAGS
+       NOTIFY_LIBS=$KQUEUE_LIBS
+       NOTIFY_OBJ=kqueue.o
+       NOTIFY_SUMMARY="yes -lkqueue"
+    else
+       AC_SEARCH_LIBS(kqueue, [])
+       if test "$ac_cv_search_kqueue" != no; then
+         AC_DEFINE(HAVE_KQUEUE, 1, [Define to 1 to use kqueue.])
+	 NOTIFY_OBJ=kqueue.o
+	 NOTIFY_SUMMARY="yes (kqueue)"
+       fi
+    fi ;;
+esac
+
 dnl g_file_monitor exists since glib 2.18.  G_FILE_MONITOR_EVENT_MOVED
 dnl has been added in glib 2.24.  It has been tested under
 dnl GNU/Linux only.
 case $with_file_notification,$NOTIFY_OBJ in
   gfile,* | yes,)
-    EMACS_CHECK_MODULES([GFILENOTIFY], [gio-2.0 >= 2.24])
-    if test "$HAVE_GFILENOTIFY" = "yes"; then
-       AC_DEFINE(HAVE_GFILENOTIFY, 1, [Define to 1 if using GFile.])
-       NOTIFY_OBJ=gfilenotify.o
-       NOTIFY_SUMMARY="yes -lgio (gfile)"
+    if test "${HAVE_NS}" = yes; then
+       AC_MSG_ERROR(['--with-file-notification=gfile' is not supported in NextStep builds.
+Consider kqueue instead.])
+    else
+       EMACS_CHECK_MODULES([GFILENOTIFY], [gio-2.0 >= 2.24])
+       if test "$HAVE_GFILENOTIFY" = "yes"; then
+	  AC_DEFINE(HAVE_GFILENOTIFY, 1, [Define to 1 if using GFile.])
+	  NOTIFY_CFLAGS=$GFILENOTIFY_CFLAGS
+	  NOTIFY_LIBS=$GFILENOTIFY_LIBS
+	  NOTIFY_OBJ=gfilenotify.o
+	  NOTIFY_SUMMARY="yes -lgio (gfile)"
+       fi
     fi ;;
 esac
 
@@ -2747,9 +2792,9 @@ esac
 if test -n "$NOTIFY_OBJ"; then
    AC_DEFINE(USE_FILE_NOTIFY, 1, [Define to 1 if using file notifications.])
 fi
+AC_SUBST(NOTIFY_CFLAGS)
+AC_SUBST(NOTIFY_LIBS)
 AC_SUBST(NOTIFY_OBJ)
-AC_SUBST(GFILENOTIFY_CFLAGS)
-AC_SUBST(GFILENOTIFY_LIBS)
 
 dnl Do not put whitespace before the #include statements below.
 dnl Older compilers (eg sunos4 cc) choke on it.
@@ -3096,13 +3141,13 @@ AC_SUBST(LIBOTF_LIBS)
 AC_SUBST(M17N_FLT_CFLAGS)
 AC_SUBST(M17N_FLT_LIBS)
 
-USE_CAIRO=no
+HAVE_CAIRO=no
 if test "${HAVE_X11}" = "yes"; then
   if test "${with_cairo}" != "no"; then
     CAIRO_REQUIRED=1.12.0
     CAIRO_MODULE="cairo >= $CAIRO_REQUIRED"
-    PKG_CHECK_MODULES(CAIRO, $CAIRO_MODULE, USE_CAIRO=yes, :)
-    if test $USE_CAIRO = yes; then
+    EMACS_CHECK_MODULES(CAIRO, $CAIRO_MODULE)
+    if test $HAVE_CAIRO = yes; then
       AC_DEFINE(USE_CAIRO, 1, [Define to 1 if using cairo.])
     else
       AC_MSG_ERROR([cairo requested but not found.])
@@ -3112,6 +3157,21 @@ if test "${HAVE_X11}" = "yes"; then
     LIBS="$LIBS $CAIRO_LIBS"
     AC_SUBST(CAIRO_CFLAGS)
     AC_SUBST(CAIRO_LIBS)
+  fi
+fi
+
+if test "${HAVE_X11}" = "yes"; then
+  AC_CHECK_HEADER(X11/Xlib-xcb.h,
+    AC_CHECK_LIB(xcb, xcb_translate_coordinates, HAVE_XCB=yes))
+  if test "${HAVE_XCB}" = "yes"; then
+    AC_CHECK_LIB(X11-xcb, XGetXCBConnection, HAVE_X11_XCB=yes)
+    if test "${HAVE_X11_XCB}" = "yes"; then
+      AC_DEFINE(USE_XCB, 1,
+[Define to 1 if you have the XCB library and X11-XCB library for mixed
+   X11/XCB programming.])
+      XCB_LIBS="-lX11-xcb -lxcb"
+      AC_SUBST(XCB_LIBS)
+    fi
   fi
 fi
 
@@ -3269,6 +3329,53 @@ if test "${HAVE_ZLIB}" = "yes"; then
   fi
 fi
 AC_SUBST(LIBZ)
+
+### Dynamic modules support
+LIBMODULES=
+HAVE_MODULES=no
+MODULES_OBJ=
+MODULES_SUFFIX=
+if test "${with_modules}" != "no"; then
+  case $opsys in
+    gnu|gnu-linux)
+      LIBMODULES="-ldl"
+      MODULES_SUFFIX=".so"
+      HAVE_MODULES=yes
+      ;;
+    cygwin|mingw32)
+      MODULES_SUFFIX=".dll"
+      HAVE_MODULES=yes
+      ;;
+    darwin)
+      MODULES_SUFFIX=".so"
+      HAVE_MODULES=yes
+      ;;
+    *)
+      # BSD systems have dlopen in libc.
+      AC_CHECK_FUNC([dlopen],
+        [MODULES_SUFFIX=".so"
+         HAVE_MODULES=yes])
+      ;;
+  esac
+
+  if test "${HAVE_MODULES}" = no; then
+    AC_MSG_ERROR([Dynamic modules are not supported on your system])
+  else
+    SAVE_LIBS=$LIBS
+    LIBS="$LIBS $LIBMODULES"
+    AC_CHECK_FUNCS([dladdr dlfunc])
+    LIBS=$SAVE_LIBS
+  fi
+fi
+
+if test "${HAVE_MODULES}" = yes; then
+   MODULES_OBJ="dynlib.o emacs-module.o"
+   AC_DEFINE(HAVE_MODULES, 1, [Define to 1 if dynamic modules are enabled])
+   AC_DEFINE_UNQUOTED(MODULES_SUFFIX, "$MODULES_SUFFIX",
+     [System extension for dynamic libraries])
+fi
+AC_SUBST(MODULES_OBJ)
+AC_SUBST(LIBMODULES)
 
 ### Use -lpng if available, unless '--with-png=no'.
 HAVE_PNG=no
@@ -3490,14 +3597,6 @@ if test "${HAVE_X11}" = "yes"; then
     fi
   fi
   if test $HAVE_XRANDR = yes; then
-    SAVE_CFLAGS="$CFLAGS"
-    SAVE_LIBS="$LIBS"
-    CFLAGS="$XRANDR_CFLAGS $CFLAGS"
-    LIBS="$XRANDR_LIBS $LIBS"
-    AC_CHECK_FUNCS(XRRGetOutputPrimary XRRGetScreenResourcesCurrent)
-    CFLAGS="$SAVE_CFLAGS"
-    LIBS="$SAVE_LIBS"
-
     AC_DEFINE(HAVE_XRANDR, 1, [Define to 1 if you have the XRandr extension.])
   fi
 fi
@@ -3555,6 +3654,14 @@ if test "${with_xml2}" != "no"; then
   # Built-in libxml2 on OS X 10.8 lacks libxml-2.0.pc.
   if test "${HAVE_LIBXML2}" != "yes" && test "$opsys" = "darwin"; then
     SAVE_CPPFLAGS="$CPPFLAGS"
+    if test -z "$xcsdkdir" -a -n "$XCRUN" -a ! -d /usr/include; then
+      dnl /usr/include is not found.  Try Xcode SDK dir if it is sane.
+      xcsdkdir=`$XCRUN --show-sdk-path 2>/dev/null`
+      case $xcsdkdir in
+	*[[\\\"\#\$\&\'\`$am_lf\ \	]]*)
+	xcsdkdir="" ;;
+      esac
+    fi
     CPPFLAGS="$CPPFLAGS -I$xcsdkdir/usr/include/libxml2"
     AC_CHECK_HEADER(libxml/HTMLparser.h,
       [AC_CHECK_DECL(HTML_PARSE_RECOVER, HAVE_LIBXML2=yes, ,
@@ -3693,14 +3800,8 @@ getpwent endpwent getgrent endgrent \
 cfmakeraw cfsetspeed copysign __executable_start log2)
 LIBS=$OLD_LIBS
 
-dnl No need to check for aligned_alloc and posix_memalign if using
-dnl gmalloc.o, as it supplies them, unless we're using hybrid_malloc.
-dnl Don't use these functions on Darwin as they are incompatible with
-dnl unexmacosx.c.
-if (test -z "$GMALLOC_OBJ" || test "$hybrid_malloc" = yes) \
-  && test "$opsys" != darwin; then
-  AC_CHECK_FUNCS([aligned_alloc posix_memalign], [break])
-fi
+dnl No need to check for posix_memalign if aligned_alloc works.
+AC_CHECK_FUNCS([aligned_alloc posix_memalign], [break])
 
 dnl Cannot use AC_CHECK_FUNCS
 AC_CACHE_CHECK([for __builtin_unwind_init],
@@ -4051,8 +4152,8 @@ OLDCFLAGS="$CFLAGS"
 OLDLIBS="$LIBS"
 CFLAGS="$CFLAGS $GTK_CFLAGS $RSVG_CFLAGS $DBUS_CFLAGS $SETTINGS_CFLAGS"
 LIBS="$LIBS $GTK_LIBS $RSVG_LIBS $DBUS_LIBS $SETTINGS_LIBS"
-CFLAGS="$CFLAGS $GFILENOTIFY_CFLAGS $CAIRO_CFLAGS"
-LIBS="$LIBS $GFILENOTIFY_LIBS $CAIRO_LIBS"
+CFLAGS="$CFLAGS $NOTIFY_CFLAGS $CAIRO_CFLAGS"
+LIBS="$LIBS $NOTIFY_LIBS $CAIRO_LIBS"
 AC_MSG_CHECKING([whether GLib is linked in])
 AC_LINK_IFELSE([AC_LANG_PROGRAM(
 	[[#include <glib.h>
@@ -4350,24 +4451,11 @@ case $opsys in
     AC_DEFINE(PTY_TTY_NAME_SPRINTF, [])
     ;;
 
-  dnl FIXME?  Maybe use same as freebsd - see bug#12040.
-  darwin )
-    AC_DEFINE(PTY_ITERATION, [int i; for (i = 0; i < 1; i++)])
-    dnl Not used, because PTY_ITERATION is defined.
-    AC_DEFINE(FIRST_PTY_LETTER, ['p'])
-    dnl Note that openpty may fork via grantpt on Mac OS X 10.4/Darwin 8.
-    dnl But we don't have to block SIGCHLD because it is blocked in the
-    dnl implementation of grantpt.
-    AC_DEFINE(PTY_OPEN, [ do { int slave; if (openpty (&fd, &slave, pty_name, NULL, NULL) == -1) fd = -1; else emacs_close (slave); } while (false)])
-    AC_DEFINE(PTY_NAME_SPRINTF, [])
-    AC_DEFINE(PTY_TTY_NAME_SPRINTF, [])
-    ;;
-
   gnu | openbsd )
     AC_DEFINE(FIRST_PTY_LETTER, ['p'])
     ;;
 
-  gnu-linux | gnu-kfreebsd | dragonfly | freebsd | netbsd | nacl )
+  gnu-linux | gnu-kfreebsd | dragonfly | freebsd | netbsd | darwin | nacl )
     dnl if HAVE_GRANTPT
     if test "x$ac_cv_func_grantpt" = xyes; then
       AC_DEFINE(UNIX98_PTYS, 1, [Define if the system has Unix98 PTYs.])
@@ -4745,7 +4833,7 @@ fi
 
 version=$PACKAGE_VERSION
 
-copyright="Copyright (C) 2015 Free Software Foundation, Inc."
+copyright="Copyright (C) 2016 Free Software Foundation, Inc."
 AC_DEFINE_UNQUOTED(COPYRIGHT, ["$copyright"],
   [Short copyright string for this version of Emacs.])
 AC_SUBST(copyright)
@@ -4820,7 +4908,7 @@ if test "${HAVE_X_WINDOWS}" = "yes" ; then
   XMENU_OBJ=xmenu.o
   XOBJ="xterm.o xfns.o xselect.o xrdb.o xsmfns.o xsettings.o"
   FONT_OBJ=xfont.o
-  if test "$USE_CAIRO" = "yes"; then
+  if test "$HAVE_CAIRO" = "yes"; then
     FONT_OBJ="ftfont.o ftcrfont.o"
   elif test "$HAVE_XFT" = "yes"; then
     FONT_OBJ="$FONT_OBJ ftfont.o xftfont.o ftxfont.o"
@@ -4871,6 +4959,9 @@ case "$USE_X_TOOLKIT" in
   LUCID) TOOLKIT_LIBW="$LUCID_LIBW" ;;
   none) test "x$HAVE_GTK" = "xyes" && TOOLKIT_LIBW="$GTK_LIBS" ;;
 esac
+if test "$HAVE_XWIDGETS" = "yes"; then
+  TOOLKIT_LIBW="$TOOLKIT_LIBW -lXcomposite"
+fi
 AC_SUBST(TOOLKIT_LIBW)
 
 if test "${opsys}" != "mingw32"; then
@@ -5091,15 +5182,15 @@ AC_SUBST(WINDOW_SYSTEM_OBJ)
 
 AH_TOP([/* GNU Emacs site configuration template file.
 
-Copyright (C) 1988, 1993-1994, 1999-2002, 2004-2015
+Copyright (C) 1988, 1993-1994, 1999-2002, 2004-2016
   Free Software Foundation, Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -5160,11 +5251,12 @@ optsep=
 emacs_config_features=
 for opt in XAW3D XPM JPEG TIFF GIF PNG RSVG CAIRO IMAGEMAGICK SOUND GPM DBUS \
   GCONF GSETTINGS NOTIFY ACL LIBSELINUX GNUTLS LIBXML2 FREETYPE M17N_FLT \
-  LIBOTF XFT ZLIB TOOLKIT_SCROLL_BARS X_TOOLKIT X11 NS; do
+  LIBOTF XFT ZLIB TOOLKIT_SCROLL_BARS X_TOOLKIT X11 NS MODULES \
+  XWIDGETS; do
 
     case $opt in
       NOTIFY|ACL) eval val=\${${opt}_SUMMARY} ;;
-      CAIRO|TOOLKIT_SCROLL_BARS|X_TOOLKIT) eval val=\${USE_$opt} ;;
+      TOOLKIT_SCROLL_BARS|X_TOOLKIT) eval val=\${USE_$opt} ;;
       *) eval val=\${HAVE_$opt} ;;
     esac
     case x$val in
@@ -5191,7 +5283,7 @@ AS_ECHO(["  Does Emacs use -lXaw3d?                                 ${HAVE_XAW3D
   Does Emacs use a gif library?                           ${HAVE_GIF} $LIBGIF
   Does Emacs use a png library?                           ${HAVE_PNG} $LIBPNG
   Does Emacs use -lrsvg-2?                                ${HAVE_RSVG}
-  Does Emacs use cairo?                                   ${USE_CAIRO}
+  Does Emacs use cairo?                                   ${HAVE_CAIRO}
   Does Emacs use imagemagick?                             ${HAVE_IMAGEMAGICK}
   Does Emacs support sound?                               ${HAVE_SOUND}
   Does Emacs use -lgpm?                                   ${HAVE_GPM}
@@ -5208,7 +5300,9 @@ AS_ECHO(["  Does Emacs use -lXaw3d?                                 ${HAVE_XAW3D
   Does Emacs use -lotf?                                   ${HAVE_LIBOTF}
   Does Emacs use -lxft?                                   ${HAVE_XFT}
   Does Emacs directly use zlib?                           ${HAVE_ZLIB}
+  Does Emacs have dynamic modules support?                ${HAVE_MODULES}
   Does Emacs use toolkit scroll bars?                     ${USE_TOOLKIT_SCROLL_BARS}
+  Does Emacs support Xwidgets (requires gtk3)?            ${HAVE_XWIDGETS}
 "])
 
 if test -n "${EMACSDATA}"; then

@@ -1,6 +1,6 @@
 ;;; vc-mtn.el --- VC backend for Monotone  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2007-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2007-2016 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: vc
@@ -101,6 +101,10 @@ switches."
 (defun vc-mtn-find-admin-dir (file)
   "Return the administrative directory of FILE."
   (expand-file-name vc-mtn-admin-dir (vc-mtn-root file)))
+
+(defun vc-mtn-find-ignore-file (file)
+  "Return the mtn ignore file that controls FILE."
+  (expand-file-name ".mtnignore" (vc-mtn-root file)))
 
 (defun vc-mtn-registered (file)
   (let ((root (vc-mtn-root file)))
@@ -253,10 +257,10 @@ If LIMIT is non-nil, show no more than this many entries."
 
 (autoload 'vc-switches "vc")
 
-(defun vc-mtn-diff (files &optional rev1 rev2 buffer async)
+(defun vc-mtn-diff (files &optional rev1 rev2 buffer _async)
   "Get a difference report using monotone between two revisions of FILES."
   (apply 'vc-mtn-command (or buffer "*vc-diff*")
-	 (if async 'async 1)
+	 1 ; bug#21969
 	 files "diff"
          (append
            (vc-switches 'mtn 'diff)

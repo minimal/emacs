@@ -1,6 +1,6 @@
 ;;; wid-edit.el --- Functions for creating and using widgets -*-byte-compile-dynamic: t; lexical-binding:t -*-
 ;;
-;; Copyright (C) 1996-1997, 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1996-1997, 1999-2016 Free Software Foundation, Inc.
 ;;
 ;; Author: Per Abrahamsen <abraham@dina.kvl.dk>
 ;; Maintainer: emacs-devel@gnu.org
@@ -1267,7 +1267,7 @@ When not inside a field, signal an error."
 
 (defun widget-field-find (pos)
   "Return the field at POS.
-Unlike (get-char-property POS 'field), this works with empty fields too."
+Unlike (get-char-property POS \\='field), this works with empty fields too."
   (let ((fields widget-field-list)
 	field found)
     (while fields

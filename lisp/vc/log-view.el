@@ -1,6 +1,6 @@
 ;;; log-view.el --- Major mode for browsing revision log histories -*- lexical-binding: t -*-
 
-;; Copyright (C) 1999-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1999-2016 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Keywords: tools, vc
@@ -542,7 +542,7 @@ If called interactively, visit the version at point."
       (setq en (point))
       (or (log-view-current-entry nil t)
           (throw 'beginning-of-buffer nil))
-      (cond ((memq backend '(SCCS RCS CVS MCVS SVN))
+      (cond ((memq backend '(SCCS RCS CVS SVN))
 	     (forward-line 2))
 	    ((eq backend 'Hg)
 	     (forward-line 4)

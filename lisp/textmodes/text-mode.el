@@ -1,6 +1,6 @@
 ;;; text-mode.el --- text mode, and its idiosyncratic commands
 
-;; Copyright (C) 1985, 1992, 1994, 2001-2015 Free Software Foundation,
+;; Copyright (C) 1985, 1992, 1994, 2001-2016 Free Software Foundation,
 ;; Inc.
 
 ;; Maintainer: emacs-devel@gnu.org
@@ -39,7 +39,7 @@
 
 (defvar text-mode-variant nil
   "Non-nil if this buffer's major mode is a variant of Text mode.
-Use (derived-mode-p 'text-mode) instead.")
+Use (derived-mode-p \\='text-mode) instead.")
 
 (defvar text-mode-syntax-table
   (let ((st (make-syntax-table)))

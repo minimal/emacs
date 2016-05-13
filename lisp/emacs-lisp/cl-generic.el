@@ -1,6 +1,6 @@
 ;;; cl-generic.el --- CLOS-style generic functions for Elisp  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2015 Free Software Foundation, Inc.
+;; Copyright (C) 2015-2016 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Version: 1.0
@@ -83,8 +83,6 @@
 ;; - A generic "filter" generalizer (e.g. could be used to cleanly add methods
 ;;   to cl-generic-combine-methods with a specializer that says it applies only
 ;;   when some particular qualifier is used).
-;; - A way to dispatch on the context (e.g. the major-mode, some global
-;;   variable, you name it).
 
 ;;; Code:
 
@@ -195,9 +193,9 @@ OPTIONS-AND-METHODS currently understands:
 - (declare DECLARATIONS)
 - (:argument-precedence-order &rest ARGS)
 - (:method [QUALIFIERS...] ARGS &rest BODY)
-BODY, if present, is used as the body of a default method.
+DEFAULT-BODY, if present, is used as the body of a default method.
 
-\(fn NAME ARGS [DOC-STRING] [OPTIONS-AND-METHODS...] &rest BODY)"
+\(fn NAME ARGS [DOC-STRING] [OPTIONS-AND-METHODS...] &rest DEFAULT-BODY)"
   (declare (indent 2) (doc-string 3))
   (let* ((doc (if (stringp (car-safe options-and-methods))
                   (pop options-and-methods)))
@@ -268,7 +266,7 @@ This macro can only be used within the lexical scope of a cl-generic method."
 
 (defmacro cl-generic-define-context-rewriter (name args &rest body)
   "Define a special kind of context named NAME.
-Whenever a context specializer of the form (NAME . ACTUALS) appears,
+Whenever a context specializer of the form (NAME . ARGS) appears,
 the specializer used will be the one returned by BODY."
   (declare (debug (&define name lambda-list def-body)) (indent defun))
   `(eval-and-compile
@@ -360,10 +358,10 @@ the specializer used will be the one returned by BODY."
 (defmacro cl-defmethod (name args &rest body)
   "Define a new method for generic function NAME.
 I.e. it defines the implementation of NAME to use for invocations where the
-value of the dispatch argument matches the specified TYPE.
-The dispatch argument has to be one of the mandatory arguments, and
-all methods of NAME have to use the same argument for dispatch.
-The dispatch argument and TYPE are specified in ARGS where the corresponding
+values of the dispatch arguments match the specified TYPEs.
+The dispatch arguments have to be among the mandatory arguments, and
+all methods of NAME have to use the same set of arguments for dispatch.
+Each dispatch argument and TYPE are specified in ARGS where the corresponding
 formal argument appears as (VAR TYPE) rather than just VAR.
 
 The optional second argument QUALIFIER is a specifier that
@@ -373,8 +371,14 @@ modifies how the method is combined with other methods, including:
    :around  - Method will be called around everything else
 The absence of QUALIFIER means this is a \"primary\" method.
 
-Other than a type, TYPE can also be of the form `(eql VAL)' in
-which case this method will be invoked when the argument is `eql' to VAL.
+TYPE can be one of the basic types (see the full list and their
+hierarchy in `cl--generic-typeof-types'), CL struct type, or an
+EIEIO class.
+
+Other than that, TYPE can also be of the form `(eql VAL)' in
+which case this method will be invoked when the argument is `eql'
+to VAL, or `(head VAL)', in which case the argument is required
+to be a cons with VAL as its head.
 
 \(fn NAME [QUALIFIER] ARGS &rest [DOCSTRING] BODY)"
   (declare (doc-string 3) (indent 2)
@@ -797,10 +801,10 @@ methods.")
 
 ;;; Define some pre-defined generic functions, used internally.
 
-(define-error 'cl-no-method "No method for %S")
-(define-error 'cl-no-next-method "No next method for %S" 'cl-no-method)
-(define-error 'cl-no-primary-method "No primary method for %S" 'cl-no-method)
-(define-error 'cl-no-applicable-method "No applicable method for %S"
+(define-error 'cl-no-method "No method")
+(define-error 'cl-no-next-method "No next method" 'cl-no-method)
+(define-error 'cl-no-primary-method "No primary method" 'cl-no-method)
+(define-error 'cl-no-applicable-method "No applicable method"
   'cl-no-method)
 
 (cl-defgeneric cl-no-next-method (generic method &rest args)
@@ -1015,6 +1019,10 @@ The value returned is a list of elements of the form
 
 (cl--generic-prefill-dispatchers 0 (eql nil))
 (cl--generic-prefill-dispatchers window-system (eql nil))
+(cl--generic-prefill-dispatchers (terminal-parameter nil 'xterm--get-selection)
+                                 (eql nil))
+(cl--generic-prefill-dispatchers (terminal-parameter nil 'xterm--set-selection)
+                                 (eql nil))
 
 ;;; Support for cl-defstructs specializers.
 

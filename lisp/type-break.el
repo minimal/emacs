@@ -1,6 +1,6 @@
 ;;; type-break.el --- encourage rests from typing at appropriate intervals  -*- lexical-binding: t -*-
 
-;; Copyright (C) 1994-1995, 1997, 2000-2015 Free Software Foundation,
+;; Copyright (C) 1994-1995, 1997, 2000-2016 Free Software Foundation,
 ;; Inc.
 
 ;; Author: Noah Friedman
@@ -133,7 +133,7 @@ keystroke even though they really require multiple keys to generate them.
 The command `type-break-guesstimate-keystroke-threshold' can be used to
 guess a reasonably good pair of values for this variable."
   :set-after '(type-break-interval)
-  :type 'sexp
+  :type '(cons (choice integer (const nil)) (choice integer (const nil)))
   :group 'type-break)
 
 (defcustom type-break-query-function 'yes-or-no-p

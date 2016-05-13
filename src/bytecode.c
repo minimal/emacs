@@ -1,13 +1,13 @@
 /* Execution of byte code produced by bytecomp.el.
-   Copyright (C) 1985-1988, 1993, 2000-2015 Free Software Foundation,
+   Copyright (C) 1985-1988, 1993, 2000-2016 Free Software Foundation,
    Inc.
 
 This file is part of GNU Emacs.
 
 GNU Emacs is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+the Free Software Foundation, either version 3 of the License, or (at
+your option) any later version.
 
 GNU Emacs is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -1067,17 +1067,13 @@ exec_byte_code (Lisp_Object bytestr, Lisp_Object vector, Lisp_Object maxdepth,
 	  type = CATCHER;
 	  goto pushhandler;
 	CASE (Bpushconditioncase): /* New in 24.4.  */
+	  type = CONDITION_CASE;
+	pushhandler:
 	  {
-	    struct handler *c;
-	    Lisp_Object tag;
-	    int dest;
+	    Lisp_Object tag = POP;
+	    int dest = FETCH2;
 
-	    type = CONDITION_CASE;
-	  pushhandler:
-	    tag = POP;
-	    dest = FETCH2;
-
-	    PUSH_HANDLER (c, tag, type);
+	    struct handler *c = push_handler (tag, type);
 	    c->bytecode_dest = dest;
 	    c->bytecode_top = top;
 
@@ -2000,9 +1996,9 @@ syms_of_bytecode (void)
 
   DEFVAR_LISP ("byte-code-meter", Vbyte_code_meter,
 	       doc: /* A vector of vectors which holds a histogram of byte-code usage.
-(aref (aref byte-code-meter 0) CODE) indicates how many times the byte
+\(aref (aref byte-code-meter 0) CODE) indicates how many times the byte
 opcode CODE has been executed.
-(aref (aref byte-code-meter CODE1) CODE2), where CODE1 is not 0,
+\(aref (aref byte-code-meter CODE1) CODE2), where CODE1 is not 0,
 indicates how many times the byte opcodes CODE1 and CODE2 have been
 executed in succession.  */);
 

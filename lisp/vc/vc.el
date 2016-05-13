@@ -1,6 +1,6 @@
 ;;; vc.el --- drive a version-control system from within Emacs  -*- lexical-binding:t -*-
 
-;; Copyright (C) 1992-1998, 2000-2015 Free Software Foundation, Inc.
+;; Copyright (C) 1992-1998, 2000-2016 Free Software Foundation, Inc.
 
 ;; Author:     FSF (see below for full credits)
 ;; Maintainer: Andre Spiegel <spiegel@gnu.org>
@@ -1026,9 +1026,6 @@ BEWARE: this function may change the current buffer."
       (if observer
 	  (vc-dired-deduce-fileset)
 	(error "State changing VC operations not supported in `dired-mode'")))
-     ((and (derived-mode-p 'log-view-mode)
-	   (setq backend (vc-responsible-backend default-directory)))
-      (list backend default-directory))
      ((setq backend (vc-backend buffer-file-name))
       (if state-model-only-files
 	(list backend (list buffer-file-name)
@@ -1044,6 +1041,9 @@ BEWARE: this function may change the current buffer."
       (progn                  ;FIXME: Why not `with-current-buffer'? --Stef.
 	(set-buffer vc-parent-buffer)
 	(vc-deduce-fileset observer allow-unregistered state-model-only-files)))
+     ((and (derived-mode-p 'log-view-mode)
+	   (setq backend (vc-responsible-backend default-directory)))
+      (list backend nil))
      ((not buffer-file-name)
        (error "Buffer %s is not associated with a file" (buffer-name)))
      ((and allow-unregistered (not (vc-registered buffer-file-name)))
@@ -1433,8 +1433,9 @@ Argument BACKEND is the backend you are using."
    (lambda (str)
      ;; Commented or empty lines.
      (string-match-p "\\`\\(?:#\\|[ \t\r\n]*\\'\\)" str))
-   (vc--read-lines
-    (vc-call-backend backend 'find-ignore-file file))))
+   (let ((file (vc-call-backend backend 'find-ignore-file file)))
+     (and (file-exists-p file)
+          (vc--read-lines file)))))
 
 (defun vc--read-lines (file)
   "Return a list of lines of FILE."
@@ -2068,6 +2069,13 @@ changes from the current branch."
     (message "File contains conflicts.")))
 
 ;;;###autoload
+(defun vc-message-unresolved-conflicts (filename)
+  "Display a message indicating unresolved conflicts in FILENAME."
+  ;; This enables all VC backends to give a standard, recognizable
+  ;; conflict message that indicates which file is conflicted.
+  (message "There are unresolved conflicts in %s" filename))
+
+;;;###autoload
 (defalias 'vc-resolve-conflicts 'smerge-ediff)
 
 ;; TODO: This is OK but maybe we could integrate it better.
@@ -2192,7 +2200,7 @@ Not all VC backends support short logs!")
 In the new log, leave point at WORKING-REVISION (if non-nil).
 LIMIT is the number of entries currently shown.
 Does nothing if IS-START-REVISION is non-nil, or if LIMIT is nil,
-or if PL-RETURN is 'limit-unsupported."
+or if PL-RETURN is `limit-unsupported'."
   (when (and limit (not (eq 'limit-unsupported pl-return))
 	     (not is-start-revision))
     (goto-char (point-max))
@@ -2459,7 +2467,8 @@ to the working revision (except for keyword expansion)."
 You must be visiting a version controlled file, or in a `vc-dir' buffer.
 On a distributed version control system, this runs a \"pull\"
 operation to update the current branch, prompting for an argument
-list if required.  Optional prefix ARG forces a prompt.
+list if required.  Optional prefix ARG forces a prompt for the VCS
+command to run.
 
 On a non-distributed version control system, update the current
 fileset to the tip revisions.  For each unchanged and unlocked
@@ -2503,8 +2512,11 @@ tip revision are merged into the working file."
 You must be visiting a version controlled file, or in a `vc-dir' buffer.
 On a distributed version control system, this runs a \"push\"
 operation on the current branch, prompting for the precise command
-if required.  Optional prefix ARG non-nil forces a prompt.
-On a non-distributed version control system, this signals an error."
+if required.  Optional prefix ARG non-nil forces a prompt for the
+VCS command to run.
+
+On a non-distributed version control system, this signals an error.
+It also signals an error in a Bazaar bound branch."
   (interactive "P")
   (let* ((vc-fileset (vc-deduce-fileset t))
 	 (backend (car vc-fileset)))

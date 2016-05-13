@@ -1,6 +1,6 @@
 ;;; css-mode.el --- Major mode to edit CSS files  -*- lexical-binding: t -*-
 
-;; Copyright (C) 2006-2015 Free Software Foundation, Inc.
+;; Copyright (C) 2006-2016 Free Software Foundation, Inc.
 
 ;; Author: Stefan Monnier <monnier@iro.umontreal.ca>
 ;; Maintainer: Simen Heggestøyl <simenheg@gmail.com>
@@ -53,6 +53,14 @@
 (defconst css-at-ids
   '("charset" "font-face" "import" "media" "namespace" "page")
   "Identifiers that appear in the form @foo.")
+
+(defconst css-bang-ids
+  '("important")
+  "Identifiers that appear in the form !foo.")
+
+(defconst scss-bang-ids
+  '("default" "global" "optional")
+  "Additional identifiers that appear in the form !foo in SCSS.")
 
 (defconst css-descriptor-ids
   '("ascent" "baseline" "bbox" "cap-height" "centerline" "definition-src"
@@ -215,7 +223,7 @@
 (defconst css-escapes-re
   "\\\\\\(?:[^\000-\037\177]\\|[0-9a-fA-F]+[ \n\t\r\f]?\\)")
 (defconst css-nmchar-re (concat "\\(?:[-[:alnum:]]\\|" css-escapes-re "\\)"))
-(defconst css-nmstart-re (concat "\\(?:--\\)?\\(?:[[:alpha:]]\\|" css-escapes-re "\\)"))
+(defconst css-nmstart-re (concat "\\(?:[[:alpha:]]\\|" css-escapes-re "\\)"))
 (defconst css-ident-re ;; (concat css-nmstart-re css-nmchar-re "*")
   ;; Apparently, "at rules" names can start with a dash, e.g. @-moz-keyframes.
   (concat css-nmchar-re "+"))
@@ -236,8 +244,8 @@
 
 (defun css--font-lock-keywords (&optional sassy)
   `((,(concat "!\\s-*"
-              (regexp-opt (append (if sassy '("global"))
-                                  '("important"))))
+              (regexp-opt (append (if sassy scss-bang-ids)
+                                  css-bang-ids)))
      (0 font-lock-builtin-face))
     ;; Atrules keywords.  IDs not in css-at-ids are valid (ignored).
     ;; In fact the regexp should probably be
@@ -246,6 +254,8 @@
     ;; Since "An at-rule consists of everything up to and including the next
     ;; semicolon (;) or the next block, whichever comes first."
     (,(concat "@" css-ident-re) (0 font-lock-builtin-face))
+    ;; Variables.
+    (,(concat "--" css-ident-re) (0 font-lock-variable-name-face))
     ;; Selectors.
     ;; FIXME: attribute selectors don't work well because they may contain
     ;; strings which have already been highlighted as f-l-string-face and
@@ -257,13 +267,13 @@
        (if (not sassy)
            ;; We don't allow / as first char, so as not to
            ;; take a comment as the beginning of a selector.
-           "[^@/:{} \t\n][^:{}]+"
+           "[^@/:{}() \t\n][^:{}()]+"
          ;; Same as for non-sassy except we do want to allow { and }
          ;; chars in selectors in the case of #{$foo}
          ;; variable interpolation!
          (concat "\\(?:" scss--hash-re
-                 "\\|[^@/:{} \t\n#]\\)"
-                 "[^:{}#]*\\(?:" scss--hash-re "[^:{}#]*\\)*"))
+                 "\\|[^@/:{}() \t\n#]\\)"
+                 "[^:{}()#]*\\(?:" scss--hash-re "[^:{}()#]*\\)*"))
        ;; Even though pseudo-elements should be prefixed by ::, a
        ;; single colon is accepted for backward compatibility.
        "\\(?:\\(:" (regexp-opt (append css-pseudo-class-ids
@@ -271,8 +281,8 @@
        "\\|\\::" (regexp-opt css-pseudo-element-ids t) "\\)"
        "\\(?:([^)]+)\\)?"
        (if (not sassy)
-           "[^:{}\n]*"
-         (concat "[^:{}\n#]*\\(?:" scss--hash-re "[^:{}\n#]*\\)*"))
+           "[^:{}()\n]*"
+         (concat "[^:{}()\n#]*\\(?:" scss--hash-re "[^:{}()\n#]*\\)*"))
        "\\)*"
        "\\)\\(?:\n[ \t]*\\)*{")
      (1 'css-selector keep))
@@ -308,7 +318,8 @@
 (defcustom css-indent-offset 4
   "Basic size of one indentation step."
   :version "22.2"
-  :type 'integer)
+  :type 'integer
+  :safe 'integerp)
 
 (require 'smie)
 
